@@ -28,7 +28,7 @@ def init_model():
     model = SimpleModel()
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
-def aggregate_model_updates(model_updates):
+def aggregate_model_updates(model_updates, round_number):
     """
     聚合来自多个客户端的模型更新。
     参数:
@@ -42,6 +42,10 @@ def aggregate_model_updates(model_updates):
             aggregated_update[k] += torch.tensor(v)
     num_updates = len(model_updates)
     aggregated_update = {k: v / num_updates for k, v in aggregated_update.items()}
+    # Log aggregation result
+    with open('training_log.txt', 'a') as log_file:
+        log_file.write(f'Round {round_number}: Aggregation completed.\n')
+    print(f'Round {round_number}: Aggregation completed.')
     return {k: v.tolist() for k, v in aggregated_update.items()}
 
 @app.route('/api/register_client', methods=['POST'])
@@ -56,6 +60,7 @@ def register_client():
         client_port = client_data['port']
         client_id = str(uuid.uuid4())
         client_registry[client_id] = {"port": client_port, "last_update": None}
+        print(f"Client {client_id} registered with port {client_port}.")
     return jsonify({"client_id": client_id, "training_config": training_config}), 200
 
 @app.route('/api/unregister_client/<client_id>', methods=['DELETE'])
@@ -70,8 +75,10 @@ def unregister_client(client_id):
     with lock:
         if client_id in client_registry:
             del client_registry[client_id]
+            print(f"Client {client_id} unregistered successfully.")
             return jsonify({"message": "Client unregistered successfully."}), 200
         else:
+            print(f"Client ID {client_id} not found for unregistration.")
             return jsonify({"message": "Client ID not found."}), 404
 
 @app.route('/api/start_training', methods=['GET'])
@@ -94,7 +101,7 @@ def start_training_rounds(rounds=MAX_ROUNDS):
     global global_model
     if global_model is None:
         global_model = init_model()
-    for _ in range(rounds):
+    for round_number in range(1, rounds + 1):
         with ThreadPoolExecutor(max_workers=len(client_registry)) as executor:
             future_to_client_id = {
                 executor.submit(train_client_model, client_id, client_info): client_id
@@ -105,7 +112,10 @@ def start_training_rounds(rounds=MAX_ROUNDS):
                 model_update = future.result()
                 if model_update is not None:
                     model_updates.append(model_update)
-        global_model = aggregate_model_updates(model_updates)
+            global_model = aggregate_model_updates(model_updates, round_number)
+    # Save the final model
+    torch.save(global_model, 'final_model.pth')
+    print("Training completed and model saved as final_model.pth")
 
 def train_client_model(client_id, client_info):
     """
