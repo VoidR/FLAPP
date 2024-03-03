@@ -34,6 +34,26 @@ def register_client():
         training_config = response.json()['training_config']
         print(f"注册成功，ID: {client_id}, 训练配置: {training_config}")
 
+def unregister_client():
+    """
+    从服务器注销客户端，清理与此客户端相关的服务器端状态。
+    入参: 无
+    出参: bool, 表示是否成功注销客户端。
+    """
+    global client_id
+    if client_id is None:
+        print("客户端未注册。")
+        return False
+    url = f"{server_url}/api/unregister_client/{client_id}"
+    response = requests.delete(url)
+    if response.status_code == 200:
+        print("客户端注销成功。")
+        client_id = None
+        return True
+    else:
+        print("客户端注销失败。")
+        return False
+
 def load_data():
     """
     加载MNIST数据集进行训练或测试。
@@ -44,28 +64,52 @@ def load_data():
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
-    dataset = datasets.MNIST(root='federated_learning/client/data', train=True, download=True, transform=transform)
-    loader = DataLoader(dataset, batch_size=64, shuffle=True)
+
+    if training_config.get("dataset", "MNIST") == "MNIST":
+        dataset = datasets.MNIST(root='federated_learning/client/data', train=True, download=True, transform=transform)
+    
+    loader = DataLoader(dataset, batch_size=training_config.get("batch_size", 64), shuffle=True)
     return loader
 
-def train_model_one_epoch(global_model_state_dict):
+def get_optimizer(model):
+    """
+    根据配置选择并返回优化器。
+    """
+    lr = training_config.get("learning_rate", 0.01)
+    if training_config.get("optimizer", "SGD") == "Adam":
+        return optim.Adam(model.parameters(), lr=lr)
+    else:  # 默认使用SGD
+        return optim.SGD(model.parameters(), lr=lr)
+
+def get_loss_function():
+    """
+    根据配置返回损失函数。
+    """
+    if training_config.get("loss", "CrossEntropy") == "CrossEntropy":
+        return F.cross_entropy
+    # 添加其他损失函数的处理逻辑
+    return F.cross_entropy  # 默认返回交叉熵损失函数
+
+def train_model_one_round(global_model_state_dict):
     """
     使用服务器提供的全局模型状态字典训练模型一个周期。
     入参: global_model_state_dict (dict): 服务器下发的全局模型状态字典。
     出参: dict, 训练一个周期后模型的状态字典。
     """
-    model = SimpleModel()
+    model = SimpleModel()  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
     data_loader = load_data()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = get_optimizer(model)
+    loss_function = get_loss_function()
     model.train()
-    for data, target in data_loader:
-        data = data.view(data.shape[0], -1)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
+    for _ in range(training_config.get("local_epochs", 1)):  # 进行多轮本地训练
+        for data, target in data_loader:
+            data = data.view(data.shape[0], -1)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = loss_function(output, target)
+            loss.backward()
+            optimizer.step()
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
 def test_model(model_state_dict):
@@ -74,6 +118,7 @@ def test_model(model_state_dict):
     入参: model_state_dict (dict): 模型状态字典。
     出参: float, 模型在测试集上的准确率。
     """
+     # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
@@ -106,30 +151,12 @@ def train_model():
     received_data = request.json
     global_model_state_dict = received_data['global_model']
 
-    local_model_update = train_model_one_epoch(global_model_state_dict)
+    local_model_update = train_model_one_round(global_model_state_dict)
     accuracy = test_model(local_model_update)
 
     return jsonify({"model_update": local_model_update, "accuracy": accuracy})
 
-def unregister_client():
-    """
-    从服务器注销客户端，清理与此客户端相关的服务器端状态。
-    入参: 无
-    出参: bool, 表示是否成功注销客户端。
-    """
-    global client_id
-    if client_id is None:
-        print("客户端未注册。")
-        return False
-    url = f"{server_url}/api/unregister_client/{client_id}"
-    response = requests.delete(url)
-    if response.status_code == 200:
-        print("客户端注销成功。")
-        client_id = None
-        return True
-    else:
-        print("客户端注销失败。")
-        return False
+
 
 if __name__ == "__main__":
     register_client()  # 注册客户端以获取ID

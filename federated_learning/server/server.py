@@ -21,8 +21,8 @@ training_config = {
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy"],
-  "global_epochs":10,
-  "local_epochs":10,
+  "global_epochs":5,
+  "local_epochs":2,
   "batch_size":32,
   "learning_rate":0.001
 }
