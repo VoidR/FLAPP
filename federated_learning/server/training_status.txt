@@ -1,0 +1,36 @@
+Round 5/5 completed
+Round 1 accuracy: 0.891
+Round 2 accuracy: 0.8939
+Round 3 accuracy: 0.8912
+Round 4 accuracy: 0.8942
+Round 5 accuracy: 0.8915
+Round 1 accuracy: 0.893
+Round 2 accuracy: 0.8895
+Round 3 accuracy: 0.8922
+Round 4 accuracy: 0.8956
+Round 5 accuracy: 0.888
+Round 6 accuracy: 0.8934
+Round 7 accuracy: 0.8936
+Round 8 accuracy: 0.8897
+Round 9 accuracy: 0.8938
+Round 10 accuracy: 0.8934
+Round 11 accuracy: 0.8928
+Round 12 accuracy: 0.892
+Round 13 accuracy: 0.8897
+Round 14 accuracy: 0.8952
+Round 15 accuracy: 0.8911
+Round 16 accuracy: 0.8947
+Round 17 accuracy: 0.8931
+Round 18 accuracy: 0.8932
+Round 19 accuracy: 0.8955
+Round 20 accuracy: 0.8937
+Round 1 accuracy: 0.8949
+Round 2 accuracy: 0.8954
+Round 1 accuracy: 0.89
+Round 1 accuracy: 0.8901
+Round 2 accuracy: 0.8953
+Round 3 accuracy: 0.8944
+Round 4 accuracy: 0.8956
+Round 5 accuracy: 0.8916
+Round 1 completed with 2 clients. Accuracy: 0.8924
+Round 1 completed with 1 clients. Accuracy: 0.8942
