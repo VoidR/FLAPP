@@ -5,7 +5,8 @@ node_modules
 /frontend
 /data
 federated_learning/client/data
-
+federated_learning/server/training_log.txt
+federated_learning/server/final_model.pth
 *__pycache__
 
 # local env files
