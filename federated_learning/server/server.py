@@ -15,9 +15,18 @@ client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
 # 训练配置
-training_config = {"model": "SimpleModel", "dataset": "MNIST", "batch_size": 64}
-# 最大训练轮数
-MAX_ROUNDS = 10
+training_config = {
+  "model":"NN",
+  "dataset":"MNIST",
+  "optimizer":"Adam",
+  "loss":"CrossEntropy",
+  "metrics":["Accuracy"],
+  "global_epochs":10,
+  "local_epochs":10,
+  "batch_size":32,
+  "learning_rate":0.001
+}
+
 
 def init_model():
     """
@@ -43,7 +52,7 @@ def aggregate_model_updates(model_updates, round_number):
     num_updates = len(model_updates)
     aggregated_update = {k: v / num_updates for k, v in aggregated_update.items()}
     # Log aggregation result
-    with open('training_log.txt', 'a') as log_file:
+    with open('federated_learning/server/training_log.txt', 'a') as log_file:
         log_file.write(f'Round {round_number}: Aggregation completed.\n')
     print(f'Round {round_number}: Aggregation completed.')
     return {k: v.tolist() for k, v in aggregated_update.items()}
@@ -88,11 +97,11 @@ def start_training():
     返回:
         Flask Response: 表示训练开始的JSON响应。
     """
-    start_training_thread = threading.Thread(target=start_training_rounds, args=(MAX_ROUNDS,))
+    start_training_thread = threading.Thread(target=start_training_rounds, args=(training_config["global_epochs"],))
     start_training_thread.start()
     return jsonify({"message": "Training started."}), 200
 
-def start_training_rounds(rounds=MAX_ROUNDS):
+def start_training_rounds(rounds=training_config["global_epochs"]):
     """
     在指定轮数内进行模型训练。
     参数:
@@ -114,7 +123,7 @@ def start_training_rounds(rounds=MAX_ROUNDS):
                     model_updates.append(model_update)
             global_model = aggregate_model_updates(model_updates, round_number)
     # Save the final model
-    torch.save(global_model, 'final_model.pth')
+    torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
 
 def train_client_model(client_id, client_info):
