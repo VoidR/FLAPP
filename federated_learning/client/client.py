@@ -1,3 +1,4 @@
+#FLAPP/federated_learning/client/client.py
 import torch
 import requests
 from torchvision import datasets, transforms
@@ -24,8 +25,8 @@ training_config = {}
 def register_client():
     """
     向服务器注册客户端，以参与联邦学习。
-    入参: 无
-    出参: 无，但函数会更新全局变量`client_id`和`training_config`
+    input: 无
+    output: 无，但函数会更新全局变量`client_id`和`training_config`
     """
     response = requests.post(f"{server_url}/api/register_client", json={"port": client_port})
     if response.status_code == 200:
@@ -37,8 +38,8 @@ def register_client():
 def unregister_client():
     """
     从服务器注销客户端，清理与此客户端相关的服务器端状态。
-    入参: 无
-    出参: bool, 表示是否成功注销客户端。
+    input: 无
+    output: bool, 表示是否成功注销客户端。
     """
     global client_id
     if client_id is None:
@@ -57,8 +58,8 @@ def unregister_client():
 def load_data():
     """
     加载MNIST数据集进行训练或测试。
-    入参: 无
-    出参: DataLoader实例，用于训练或测试数据的迭代。
+    input: 无
+    output: DataLoader实例，用于训练或测试数据的迭代。
     """
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -93,8 +94,8 @@ def get_loss_function():
 def train_model_one_round(global_model_state_dict):
     """
     使用服务器提供的全局模型状态字典训练模型一个周期。
-    入参: global_model_state_dict (dict): 服务器下发的全局模型状态字典。
-    出参: dict, 训练一个周期后模型的状态字典。
+    input: global_model_state_dict (dict): 服务器下发的全局模型状态字典。
+    output: dict, 训练一个周期后模型的状态字典。
     """
     model = SimpleModel()  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
@@ -115,8 +116,8 @@ def train_model_one_round(global_model_state_dict):
 def test_model(model_state_dict):
     """
     在MNIST测试数据集上测试给定的模型状态字典。
-    入参: model_state_dict (dict): 模型状态字典。
-    出参: float, 模型在测试集上的准确率。
+    input: model_state_dict (dict): 模型状态字典。
+    output: float, 模型在测试集上的准确率。
     """
      # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
     transform = transforms.Compose([
@@ -145,8 +146,8 @@ def test_model(model_state_dict):
 def train_model():
     """
     API端点，用于接收全局模型状态，进行训练和测试。
-    入参: 通过POST请求的JSON体接收的全局模型状态。
-    出参: JSON响应，包含本地模型更新和准确率。
+    input: 通过POST请求的JSON体接收的全局模型状态。
+    output: JSON响应，包含本地模型更新和准确率。
     """
     received_data = request.json
     global_model_state_dict = received_data['global_model']
@@ -155,7 +156,6 @@ def train_model():
     accuracy = test_model(local_model_update)
 
     return jsonify({"model_update": local_model_update, "accuracy": accuracy})
-
 
 
 if __name__ == "__main__":
