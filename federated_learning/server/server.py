@@ -2,8 +2,11 @@
 import requests
 import torch
 from flask import Flask, request, jsonify
-from federated_learning.models.SimpleModel import SimpleModel
-from federated_learning.models.ResNet import resnet20
+# from federated_learning.models.SimpleModel import SimpleModel
+# from federated_learning.models.ResNet import resnet20
+from federated_learning.models import *
+from federated_learning.models.LogisticRegression import LogisticRegressionModel
+
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,17 +23,17 @@ client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
 # 训练配置
-model_config = ["NN", "ResNet20", "MLP"]
-dataset_config = ["MNIST", "CIFAR10"]
+model_config = ["NN", "ResNet20", "MLP","LR"]
+dataset_config = ["MNIST", "CIFAR10","Iris"]
 
 training_config = {
-  "model":"ResNet20",
-  "dataset":"CIFAR10",
+  "model":"LR",
+  "dataset":"Iris",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy"],
-  "global_epochs":10,
-  "local_epochs":5,
+  "global_epochs":20,
+  "local_epochs":10,
   "batch_size":64,
   "learning_rate":0.001
 }
@@ -60,10 +63,18 @@ def init_model():
     if training_config.get("dataset") == "MNIST":
         dim_in = 28
         dim_out = 10
+    elif training_config.get("dataset") == "CIFAR10":
+        dim_in = 32
+        dim_out = 10
+    elif training_config.get("dataset") == "Iris": 
+        dim_in = 4
+        dim_out = 3
     if training_config.get("model") == "NN":
         model = SimpleModel(dim_in, dim_out)
     elif training_config.get("model") == "ResNet20":
         model = resnet20()
+    elif training_config.get("model") == "LR":
+        model = LogisticRegressionModel(dim_in, dim_out)
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
 def aggregate_model_updates(model_updates, round_number):

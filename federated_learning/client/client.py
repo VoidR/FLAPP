@@ -2,15 +2,19 @@
 import torch
 import requests
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 import torch.optim as optim
 import torch.nn.functional as F
 from flask import Flask, request, jsonify
+# from federated_learning.models import *
 from federated_learning.models.SimpleModel import SimpleModel
 from federated_learning.models.ResNet import resnet20
 from federated_learning.models.MLP import MLP
+from federated_learning.models.LogisticRegression import LogisticRegressionModel
 import argparse
 # import sqlite3
+
+from sklearn import datasets 
 
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='客户端启动配置')
@@ -26,7 +30,7 @@ client_id = None
 # training_config = {}
 training_config = {
   "model":"ResNet20",
-  "dataset":"CIFAR10",
+  "dataset":"Iris",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy"],
@@ -42,18 +46,23 @@ def get_model():
     input: 无
     output: 模型
     """
+    dim_in = None
+    num_classes = None
     if training_config.get("dataset") == "MNIST":
         dim_in = 28
         num_classes = 10
     elif training_config.get("dataset") == "CIFAR10":
         num_channels = 3
         num_classes = 10
-
+    elif training_config.get("dataset") == "Iris":
+        dim_in = 4
+        num_classes = 3
     if training_config.get("model") == "NN":
         model = SimpleModel(dim_in, num_classes)
     elif training_config.get("model") == "ResNet20":
         model = resnet20(num_classes=10, num_channels=3)
-
+    elif training_config.get("model") == "LR":
+        model = LogisticRegressionModel(dim_in, num_classes)
     return model
 
 def register_client():
@@ -116,6 +125,14 @@ def load_data(train=True):
             transforms.Normalize(cifar10_means, cifar10_stds)
         ])
         dataset = datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
+    elif training_config.get("dataset") == "Iris":
+        # 加载鸢尾花数据集
+        iris = datasets.load_iris()
+        # 数据和标签转换为Tensor
+        data_tensor = torch.tensor(iris.data, dtype=torch.float32)
+        target_tensor = torch.tensor(iris.target, dtype=torch.long)
+        # 创建TensorDataset
+        dataset = TensorDataset(data_tensor, target_tensor)
     else:
         raise ValueError("Unsupported dataset. Please choose either 'MNIST' or 'CIFAR10'.")
 
@@ -215,11 +232,17 @@ def train_model():
     return jsonify({"model_update": local_model_update, "accuracy": accuracy})
 
 
+def mytest():
+    load_data(train=True)
+
 if __name__ == "__main__":
     register_client()  # 注册客户端以获取ID
     try:
         app.run(host='0.0.0.0', port=client_port, debug=False)
     finally:
         unregister_client()  # 确保应用退出时注销客户端
+    # mytest()
+
+
 
 
