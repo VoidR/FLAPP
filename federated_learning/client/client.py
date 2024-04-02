@@ -7,7 +7,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 from flask import Flask, request, jsonify
 from federated_learning.models.SimpleModel import SimpleModel
+from federated_learning.models.ResNet import resnet20
+from federated_learning.models.MLP import MLP
 import argparse
+# import sqlite3
 
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='客户端启动配置')
@@ -20,7 +23,38 @@ app = Flask(__name__)
 server_url = "http://127.0.0.1:5000"
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
-training_config = {}
+# training_config = {}
+training_config = {
+  "model":"ResNet20",
+  "dataset":"CIFAR10",
+  "optimizer":"Adam",
+  "loss":"CrossEntropy",
+  "metrics":["Accuracy"],
+  "global_epochs":5,
+  "local_epochs":2,
+  "batch_size":32,
+  "learning_rate":0.001
+}
+
+def get_model():
+    """
+    根据配置返回模型实例。
+    input: 无
+    output: 模型
+    """
+    if training_config.get("dataset") == "MNIST":
+        dim_in = 28
+        num_classes = 10
+    elif training_config.get("dataset") == "CIFAR10":
+        num_channels = 3
+        num_classes = 10
+
+    if training_config.get("model") == "NN":
+        model = SimpleModel(dim_in, num_classes)
+    elif training_config.get("model") == "ResNet20":
+        model = resnet20(num_classes=10, num_channels=3)
+
+    return model
 
 def register_client():
     """
@@ -55,22 +89,48 @@ def unregister_client():
         print("客户端注销失败。")
         return False
 
-def load_data():
+def load_data(train=True):
     """
-    加载MNIST数据集进行训练或测试。
-    input: 无
+    加载数据集进行训练或测试。
+    input: train (bool): 如果为True，则加载训练集，否则加载测试集。
     output: DataLoader实例，用于训练或测试数据的迭代。
     """
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
 
-    if training_config.get("dataset", "MNIST") == "MNIST":
-        dataset = datasets.MNIST(root='federated_learning/client/data', train=True, download=True, transform=transform)
-    
-    loader = DataLoader(dataset, batch_size=training_config.get("batch_size", 64), shuffle=True)
+    # CIFAR10的全局平均值和标准差
+    cifar10_means = (0.4914, 0.4822, 0.4465)
+    cifar10_stds = (0.2470, 0.2435, 0.2616)
+
+    # MNIST的全局平均值和标准差
+    mnist_mean = (0.1307,)
+    mnist_std = (0.3081,)
+
+    if training_config.get("dataset") == "MNIST":
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mnist_mean, mnist_std)
+        ])
+        dataset = datasets.MNIST(root='federated_learning/client/data', train=train, download=True, transform=transform)
+    elif training_config.get("dataset") == "CIFAR10":
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(cifar10_means, cifar10_stds)
+        ])
+        dataset = datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
+    else:
+        raise ValueError("Unsupported dataset. Please choose either 'MNIST' or 'CIFAR10'.")
+
+    loader = DataLoader(dataset, batch_size=training_config.get("batch_size", 64), shuffle=train)
     return loader
+
+
+def load_test_data():
+    """
+    加载测试数据集。
+    input: 无
+    output: DataLoader实例，用于测试数据的迭代。
+    """
+    return load_data(train=False)
+
 
 def get_optimizer(model):
     """
@@ -97,15 +157,16 @@ def train_model_one_round(global_model_state_dict):
     input: global_model_state_dict (dict): 服务器下发的全局模型状态字典。
     output: dict, 训练一个周期后模型的状态字典。
     """
-    model = SimpleModel()  # 此处应根据training_config['model']选择不同的模型
+    print("开始训练")
+    model = get_model()  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
-    data_loader = load_data()
+    data_loader = load_data(train=True)
     optimizer = get_optimizer(model)
     loss_function = get_loss_function()
     model.train()
     for _ in range(training_config.get("local_epochs", 1)):  # 进行多轮本地训练
         for data, target in data_loader:
-            data = data.view(data.shape[0], -1)
+            # data = data.view(data.shape[0], -1)
             optimizer.zero_grad()
             output = model(data)
             loss = loss_function(output, target)
@@ -120,20 +181,16 @@ def test_model(model_state_dict):
     output: float, 模型在测试集上的准确率。
     """
      # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-    test_dataset = datasets.MNIST(root='federated_learning/client/data', train=False, download=True, transform=transform)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-    model = SimpleModel()
+
+    test_loader = load_test_data()
+    model = get_model()
     model.load_state_dict({k: torch.tensor(v) for k, v in model_state_dict.items()})
     model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
         for data, target in test_loader:
-            data = data.view(data.size(0), -1)
+            # data = data.view(data.size(0), -1)
             outputs = model(data)
             _, predicted = torch.max(outputs.data, 1)
             total += target.size(0)
@@ -164,3 +221,5 @@ if __name__ == "__main__":
         app.run(host='0.0.0.0', port=client_port, debug=False)
     finally:
         unregister_client()  # 确保应用退出时注销客户端
+
+

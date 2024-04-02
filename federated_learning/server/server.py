@@ -3,9 +3,13 @@ import requests
 import torch
 from flask import Flask, request, jsonify
 from federated_learning.models.SimpleModel import SimpleModel
+from federated_learning.models.ResNet import resnet20
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
+# import sqlite3
+# import pickle
+
 
 app = Flask(__name__)
 
@@ -16,17 +20,35 @@ client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
 # 训练配置
+model_config = ["NN", "ResNet20", "MLP"]
+dataset_config = ["MNIST", "CIFAR10"]
+
 training_config = {
-  "model":"NN",
-  "dataset":"MNIST",
+  "model":"ResNet20",
+  "dataset":"CIFAR10",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy"],
-  "global_epochs":5,
-  "local_epochs":2,
-  "batch_size":32,
+  "global_epochs":10,
+  "local_epochs":5,
+  "batch_size":64,
   "learning_rate":0.001
 }
+
+# DATABASE_PATH = 'federated_learning/server/federated_learning.db'
+# def init_db():
+    
+#     with sqlite3.connect(DATABASE_PATH) as conn:
+#         cursor = conn.cursor()
+#         cursor.execute('''
+#         CREATE TABLE IF NOT EXISTS models (
+#             id INTEGER PRIMARY KEY AUTOINCREMENT,
+#             round_number INTEGER NOT NULL,
+#             model_state BLOB NOT NULL,
+#             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+#         )
+#         ''')
+#         conn.commit()
 
 
 def init_model():
@@ -35,7 +57,13 @@ def init_model():
     返回:
         dict: 模型的初始状态字典，键为层名，值为权重和偏置的列表。
     """
-    model = SimpleModel()
+    if training_config.get("dataset") == "MNIST":
+        dim_in = 28
+        dim_out = 10
+    if training_config.get("model") == "NN":
+        model = SimpleModel(dim_in, dim_out)
+    elif training_config.get("model") == "ResNet20":
+        model = resnet20()
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
 def aggregate_model_updates(model_updates, round_number):
@@ -146,4 +174,7 @@ def train_client_model(client_id, client_info):
     return None
 
 if __name__ == '__main__':
+    # init_db()
     app.run(host='0.0.0.0', port=5000, debug=False)
+
+    # init_model()
