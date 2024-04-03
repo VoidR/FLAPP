@@ -35,7 +35,13 @@ training_config = {
   "global_epochs":20,
   "local_epochs":10,
   "batch_size":64,
-  "learning_rate":0.001
+  "learning_rate":0.001,
+  "client_use_differential_privacy": True,
+  "differential_privacy": {
+    "epsilon": 1.0,   
+    "delta": 1e-5,  
+    "sensitivity": 1.0 
+  }
 }
 
 # DATABASE_PATH = 'federated_learning/server/federated_learning.db'

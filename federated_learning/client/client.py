@@ -6,15 +6,21 @@ from torch.utils.data import DataLoader, TensorDataset
 import torch.optim as optim
 import torch.nn.functional as F
 from flask import Flask, request, jsonify
+
+import argparse
+# import sqlite3
+
+from sklearn import datasets 
+
+
 # from federated_learning.models import *
 from federated_learning.models.SimpleModel import SimpleModel
 from federated_learning.models.ResNet import resnet20
 from federated_learning.models.MLP import MLP
 from federated_learning.models.LogisticRegression import LogisticRegressionModel
-import argparse
-# import sqlite3
 
-from sklearn import datasets 
+from federated_learning.client.utils.DP import dp_protection
+
 
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='客户端启动配置')
@@ -27,18 +33,23 @@ app = Flask(__name__)
 server_url = "http://127.0.0.1:5000"
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
-# training_config = {}
-training_config = {
-  "model":"ResNet20",
-  "dataset":"Iris",
-  "optimizer":"Adam",
-  "loss":"CrossEntropy",
-  "metrics":["Accuracy"],
-  "global_epochs":5,
-  "local_epochs":2,
-  "batch_size":32,
-  "learning_rate":0.001
-}
+training_config = {}
+# training_config = {
+#   "model":"LR",
+#   "dataset":"Iris",
+#   "optimizer":"Adam",
+#   "loss":"CrossEntropy",
+#   "metrics":["Accuracy"],
+#   "global_epochs":20,
+#   "local_epochs":10,
+#   "batch_size":64,
+#   "learning_rate":0.001,
+#   "client_use_differential_privacy": True,
+#   "differential_privacy": {
+#     "epsilon": 1.0,   
+#     "delta": 1e-5,   
+#   }
+# }
 
 def get_model():
     """
@@ -229,8 +240,21 @@ def train_model():
     local_model_update = train_model_one_round(global_model_state_dict)
     accuracy = test_model(local_model_update)
 
+    local_model_update = apply_security_measures(local_model_update)
     return jsonify({"model_update": local_model_update, "accuracy": accuracy})
 
+
+def apply_security_measures(model_update):
+    """
+    应用安全措施到模型更新，当前使用差分隐私。
+    可以在这里添加更多的安全措施。
+    """
+    if training_config['client_use_differential_privacy']:
+        dp_params = training_config['differential_privacy']
+        # 应用差分隐私机制，比如添加高斯噪声
+        model_update = dp_protection(model_update, dp_params)
+    # 将来可能添加其他安全措施
+    return model_update
 
 def mytest():
     load_data(train=True)
