@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify
 import argparse
 # import sqlite3
 
-from sklearn import datasets 
+from sklearn import datasets as skdatasets
 
 
 # from federated_learning.models import *
@@ -138,7 +138,7 @@ def load_data(train=True):
         dataset = datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
     elif training_config.get("dataset") == "Iris":
         # 加载鸢尾花数据集
-        iris = datasets.load_iris()
+        iris = skdatasets.load_iris()
         # 数据和标签转换为Tensor
         data_tensor = torch.tensor(iris.data, dtype=torch.float32)
         target_tensor = torch.tensor(iris.target, dtype=torch.long)
