@@ -2,10 +2,13 @@
 import requests
 import torch
 from flask import Flask, request, jsonify
-# from federated_learning.models.SimpleModel import SimpleModel
-# from federated_learning.models.ResNet import resnet20
-from federated_learning.models import *
+
+# from federated_learning.models import *
 from federated_learning.models.LogisticRegression import LogisticRegressionModel
+from federated_learning.models.SimpleModel import SimpleModel
+from federated_learning.models.ResNet import resnet20
+from federated_learning.models.LeNet import LeNet
+from federated_learning.models.AlexNet import AlexNet
 
 import threading
 import uuid
@@ -23,17 +26,17 @@ client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
 # 训练配置
-model_config = ["NN", "ResNet20", "MLP","LR"]
+model_config = ["NN", "ResNet20", "MLP","LR","LeNet","AlexNet"]
 dataset_config = ["MNIST", "CIFAR10","Iris"]
 
 training_config = {
-  "model":"LR",
-  "dataset":"Iris",
+  "model":"AlexNet",
+  "dataset":"CIFAR10",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy"],
-  "global_epochs":20,
-  "local_epochs":10,
+  "global_epochs":10,
+  "local_epochs":2,
   "batch_size":64,
   "learning_rate":0.001,
   "client_use_differential_privacy": True,
@@ -66,21 +69,27 @@ def init_model():
     返回:
         dict: 模型的初始状态字典，键为层名，值为权重和偏置的列表。
     """
+    dim_in = None
+    num_classes = None
     if training_config.get("dataset") == "MNIST":
         dim_in = 28
-        dim_out = 10
+        num_classes = 10
     elif training_config.get("dataset") == "CIFAR10":
-        dim_in = 32
-        dim_out = 10
-    elif training_config.get("dataset") == "Iris": 
+        num_channels = 3
+        num_classes = 10
+    elif training_config.get("dataset") == "Iris":
         dim_in = 4
-        dim_out = 3
+        num_classes = 3
     if training_config.get("model") == "NN":
-        model = SimpleModel(dim_in, dim_out)
+        model = SimpleModel(dim_in, num_classes)
     elif training_config.get("model") == "ResNet20":
-        model = resnet20()
+        model = resnet20(num_classes=10, num_channels=3)
     elif training_config.get("model") == "LR":
-        model = LogisticRegressionModel(dim_in, dim_out)
+        model = LogisticRegressionModel(dim_in, num_classes)
+    elif training_config.get("model") == "LeNet":
+        model = LeNet(dim_out=num_classes)
+    elif training_config.get("model") == "AlexNet":
+        model = AlexNet(num_classes=num_classes)
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
 def aggregate_model_updates(model_updates, round_number):

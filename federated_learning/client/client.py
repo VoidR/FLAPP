@@ -18,6 +18,8 @@ from federated_learning.models.SimpleModel import SimpleModel
 from federated_learning.models.ResNet import resnet20
 from federated_learning.models.MLP import MLP
 from federated_learning.models.LogisticRegression import LogisticRegressionModel
+from federated_learning.models.LeNet import LeNet
+from federated_learning.models.AlexNet import AlexNet
 
 from federated_learning.client.utils.DP import dp_protection
 
@@ -74,6 +76,11 @@ def get_model():
         model = resnet20(num_classes=10, num_channels=3)
     elif training_config.get("model") == "LR":
         model = LogisticRegressionModel(dim_in, num_classes)
+    elif training_config.get("model") == "LeNet":
+        model = LeNet(dim_out=num_classes)
+    elif training_config.get("model") == "AlexNet":
+        model = AlexNet(num_classes=num_classes)
+
     return model
 
 def register_client():
