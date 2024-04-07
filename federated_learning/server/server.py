@@ -28,15 +28,16 @@ lock = threading.Lock()
 # 训练配置
 model_config = ["NN", "ResNet20", "MLP","LR","LeNet","AlexNet"]
 dataset_config = ["MNIST", "CIFAR10","Iris"]
+metrics_config = ["Accuracy", "Precision", "Recall", "F1"]
 
 training_config = {
-  "model":"AlexNet",
-  "dataset":"CIFAR10",
+  "model":"NN",
+  "dataset":"MNIST",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
-  "metrics":["Accuracy"],
-  "global_epochs":10,
-  "local_epochs":2,
+  "metrics":["Accuracy", "Precision", "Recall", "F1"],
+  "global_epochs":20,
+  "local_epochs":1,
   "batch_size":64,
   "learning_rate":0.001,
   "client_use_differential_privacy": True,
@@ -125,6 +126,7 @@ def register_client():
         client_id = str(uuid.uuid4())
         client_registry[client_id] = {"port": client_port, "last_update": None}
         print(f"Client {client_id} registered with port {client_port}.")
+        print_client_count()
     return jsonify({"client_id": client_id, "training_config": training_config}), 200
 
 @app.route('/api/unregister_client/<client_id>', methods=['DELETE'])
@@ -140,6 +142,7 @@ def unregister_client(client_id):
         if client_id in client_registry:
             del client_registry[client_id]
             print(f"Client {client_id} unregistered successfully.")
+            print_client_count()
             return jsonify({"message": "Client unregistered successfully."}), 200
         else:
             print(f"Client ID {client_id} not found for unregistration.")
@@ -168,7 +171,7 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
     for round_number in range(1, rounds + 1):
         with ThreadPoolExecutor(max_workers=len(client_registry)) as executor:
             future_to_client_id = {
-                executor.submit(train_client_model, client_id, client_info): client_id
+                executor.submit(train_client_model, client_id, client_info, round_number): client_id
                 for client_id, client_info in client_registry.items()
             }
             model_updates = []
@@ -176,12 +179,12 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
                 model_update = future.result()
                 if model_update is not None:
                     model_updates.append(model_update)
-            global_model = aggregate_model_updates(model_updates, round_number)
+            global_model = aggregate_model_updates(model_updates, round_number) #todo:客户端上传的json中包含当前轮数
     # Save the final model
     torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
 
-def train_client_model(client_id, client_info):
+def train_client_model(client_id, client_info, current_round):
     """
     向指定客户端发送模型训练请求。
     参数:
@@ -192,12 +195,18 @@ def train_client_model(client_id, client_info):
     """
     client_url = f"http://127.0.0.1:{client_info['port']}/api/train_model"
     try:
-        response = requests.post(client_url, json={"global_model": global_model})
+        response = requests.post(client_url, json={"global_model": global_model, "current_round": current_round})
         if response.status_code == 200:
             return response.json()['model_update']
     except requests.exceptions.RequestException as e:
         print(f"Failed to send request to client {client_id}: {e}")
     return None
+
+# 查询当前客户端数量
+# @app.route('/api/get_client_count', methods=['GET'])
+def print_client_count():
+    client_count = len(client_registry)
+    print("client_count: ",client_count)
 
 if __name__ == '__main__':
     # init_db()

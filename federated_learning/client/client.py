@@ -1,5 +1,8 @@
 #FLAPP/federated_learning/client/client.py
+import os
+import csv
 import torch
+import logging
 import requests
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, TensorDataset
@@ -11,7 +14,7 @@ import argparse
 # import sqlite3
 
 from sklearn import datasets as skdatasets
-
+from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
 # from federated_learning.models import *
 from federated_learning.models.SimpleModel import SimpleModel
@@ -27,12 +30,14 @@ from federated_learning.client.utils.DP import dp_protection
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='客户端启动配置')
 parser.add_argument('-p', '--port', type=int, default=5001, help='客户端端口号，默认为5001')
+parser.add_argument('-s', '--server', type=str, default="http://127.0.0.1:5000", help='服务器IP，默认为http://127.0.0.1:5000')
 args = parser.parse_args()
 
 app = Flask(__name__)
 
 # 配置变量
-server_url = "http://127.0.0.1:5000"
+server_url = args.server
+# server_url = "http://192.168.1.115:5000"
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
 training_config = {}
@@ -186,13 +191,32 @@ def get_loss_function():
     # 添加其他损失函数的处理逻辑
     return F.cross_entropy  # 默认返回交叉熵损失函数
 
-def train_model_one_round(global_model_state_dict):
+@app.route('/api/train_model', methods=['POST'])
+def train_model():
+    """
+    API端点，用于接收全局模型状态，进行训练和测试。
+    input: 通过POST请求的JSON体接收的全局模型状态。
+    output: JSON响应，包含本地模型更新和准确率。
+    """
+    received_data = request.json
+
+    local_model_update = train_model_one_round(received_data)
+    
+    local_model_update = apply_security_measures(local_model_update)
+
+    return jsonify({"model_update": local_model_update})
+
+
+def train_model_one_round(global_model_info):
     """
     使用服务器提供的全局模型状态字典训练模型一个周期。
-    input: global_model_state_dict (dict): 服务器下发的全局模型状态字典。
+    input: global_model_info(json): 服务器提供的json, 包括全局模型参数和当前全局轮数。
     output: dict, 训练一个周期后模型的状态字典。
     """
-    print("开始训练")
+    global_model_state_dict = global_model_info['global_model']
+    current_round = global_model_info["current_round"]
+
+    print("开始训练，全局轮数:", current_round)
     model = get_model()  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
     data_loader = load_data(train=True)
@@ -207,48 +231,62 @@ def train_model_one_round(global_model_state_dict):
             loss = loss_function(output, target)
             loss.backward()
             optimizer.step()
+    test_model(model,current_round)
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
-def test_model(model_state_dict):
+def test_model(model,current_round):
     """
-    在MNIST测试数据集上测试给定的模型状态字典。
+    在测试数据集上测试给定的模型状态字典, 根据training_config.get("metrics")中的选项保存测试结果。
     input: model_state_dict (dict): 模型状态字典。
-    output: float, 模型在测试集上的准确率。
     """
-     # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
+    # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
 
     test_loader = load_test_data()
-    model = get_model()
-    model.load_state_dict({k: torch.tensor(v) for k, v in model_state_dict.items()})
     model.eval()
-    correct = 0
-    total = 0
+
+    y_true = []
+    y_pred = []
+
     with torch.no_grad():
         for data, target in test_loader:
-            # data = data.view(data.size(0), -1)
             outputs = model(data)
             _, predicted = torch.max(outputs.data, 1)
-            total += target.size(0)
-            correct += (predicted == target).sum().item()
-    accuracy = correct / total
-    print(f'模型在测试图像上的准确率: {accuracy * 100:.2f}%')
-    return accuracy
+            y_true.extend(target.tolist())
+            y_pred.extend(predicted.tolist())
 
-@app.route('/api/train_model', methods=['POST'])
-def train_model():
-    """
-    API端点，用于接收全局模型状态，进行训练和测试。
-    input: 通过POST请求的JSON体接收的全局模型状态。
-    output: JSON响应，包含本地模型更新和准确率。
-    """
-    received_data = request.json
-    global_model_state_dict = received_data['global_model']
+    metrics = training_config.get("metrics", [])
+    results = {}
 
-    local_model_update = train_model_one_round(global_model_state_dict)
-    accuracy = test_model(local_model_update)
+    if "Accuracy" in metrics:
+        # correct = sum([1 for true, pred in zip(y_true, y_pred) if true == pred])
+        # total = len(y_true)
+        # accuracy = correct / total
+        accuracy = accuracy_score(y_true, y_pred)
+        results['Accuracy'] = accuracy
 
-    local_model_update = apply_security_measures(local_model_update)
-    return jsonify({"model_update": local_model_update, "accuracy": accuracy})
+    if "Precision" in metrics:
+        precision = precision_score(y_true, y_pred, average='weighted')
+        results['Precision'] = precision
+
+    if "Recall" in metrics:
+        recall = recall_score(y_true, y_pred, average='weighted')
+        results['Recall'] = recall
+
+    if "F1" in metrics:
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        results['F1'] = f1
+
+    file_exists = os.path.isfile('results.csv')
+    # 将结果写入CSV文件
+    with open('results.csv', 'a+', newline='') as csvfile:
+        fieldnames = ['Round'] + metrics
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        results['Round'] = current_round
+        writer.writerow(results)
 
 
 def apply_security_measures(model_update):
@@ -263,8 +301,8 @@ def apply_security_measures(model_update):
     # 将来可能添加其他安全措施
     return model_update
 
-def mytest():
-    load_data(train=True)
+# def mytest():
+#     load_data(train=True)
 
 if __name__ == "__main__":
     register_client()  # 注册客户端以获取ID
