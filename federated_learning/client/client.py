@@ -52,7 +52,7 @@ def get_local_ip():
     finally:
         s.close()
     return IP
-    
+
 # 配置变量
 server_url = args.server
 # server_url = "http://192.168.1.115:5000"
@@ -241,6 +241,16 @@ def train_model_one_round(global_model_info):
     print("开始训练，全局轮数:", current_round)
     model = get_model()  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
+
+    # 检查是否有可用的CUDA
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
+    # 将模型移动到正确的设备
+    model.to(device)
+
     data_loader = load_data(train=True)
     optimizer = get_optimizer(model)
     loss_function = get_loss_function()
@@ -248,6 +258,7 @@ def train_model_one_round(global_model_info):
     for _ in range(training_config.get("local_epochs", 1)):  # 进行多轮本地训练
         for data, target in data_loader:
             # data = data.view(data.shape[0], -1)
+            data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
             output = model(data)
             loss = loss_function(output, target)
