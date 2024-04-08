@@ -31,12 +31,12 @@ dataset_config = ["MNIST", "CIFAR10","Iris"]
 metrics_config = ["Accuracy", "Precision", "Recall", "F1"]
 
 training_config = {
-  "model":"NN",
-  "dataset":"MNIST",
+  "model":"AlexNet",
+  "dataset":"CIFAR10",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
   "metrics":["Accuracy", "Precision", "Recall", "F1"],
-  "global_epochs":20,
+  "global_epochs":1200,
   "local_epochs":1,
   "batch_size":64,
   "learning_rate":0.001,
@@ -122,10 +122,10 @@ def register_client():
     """
     with lock:
         client_data = request.json
-        client_port = client_data['port']
+        client_url= client_data['client_url']
         client_id = str(uuid.uuid4())
-        client_registry[client_id] = {"port": client_port, "last_update": None}
-        print(f"Client {client_id} registered with port {client_port}.")
+        client_registry[client_id] = {"client_url": client_url, "last_update": None}
+        print(f"Client {client_id} registered with url {client_url}.")
         print_client_count()
     return jsonify({"client_id": client_id, "training_config": training_config}), 200
 
@@ -193,9 +193,9 @@ def train_client_model(client_id, client_info, current_round):
     返回:
         dict: 客户端返回的模型更新；如果请求失败，返回None。
     """
-    client_url = f"http://127.0.0.1:{client_info['port']}/api/train_model"
+    client_url_train = f"{client_info['client_url']}/api/train_model"
     try:
-        response = requests.post(client_url, json={"global_model": global_model, "current_round": current_round})
+        response = requests.post(client_url_train, json={"global_model": global_model, "current_round": current_round})
         if response.status_code == 200:
             return response.json()['model_update']
     except requests.exceptions.RequestException as e:

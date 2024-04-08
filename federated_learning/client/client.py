@@ -10,6 +10,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from flask import Flask, request, jsonify
 
+import socket
 import argparse
 # import sqlite3
 
@@ -35,9 +36,27 @@ args = parser.parse_args()
 
 app = Flask(__name__)
 
+def get_local_ip():
+    """
+    获取本地 IP 地址
+    input: 无
+    output: 本地 IP 地址
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+    
 # 配置变量
 server_url = args.server
 # server_url = "http://192.168.1.115:5000"
+client_IP = get_local_ip()
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
 training_config = {}
@@ -88,13 +107,16 @@ def get_model():
 
     return model
 
+
+
+
 def register_client():
     """
     向服务器注册客户端，以参与联邦学习。
     input: 无
     output: 无，但函数会更新全局变量`client_id`和`training_config`
     """
-    response = requests.post(f"{server_url}/api/register_client", json={"port": client_port})
+    response = requests.post(f"{server_url}/api/register_client", json={"client_url": f"http://{client_IP}:{client_port}"})
     if response.status_code == 200:
         global client_id, training_config
         client_id = response.json()['client_id']
@@ -301,8 +323,8 @@ def apply_security_measures(model_update):
     # 将来可能添加其他安全措施
     return model_update
 
-# def mytest():
-#     load_data(train=True)
+def mytest():
+    print(get_local_ip())
 
 if __name__ == "__main__":
     register_client()  # 注册客户端以获取ID
