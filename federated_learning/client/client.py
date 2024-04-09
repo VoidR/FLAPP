@@ -59,6 +59,7 @@ server_url = args.server
 client_IP = get_local_ip()
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
+
 training_config = {}
 # training_config = {
 #   "model":"LR",
@@ -114,8 +115,6 @@ def get_model():
         model = AlexNet(num_classes=num_classes)
 
     return model
-
-
 
 
 def register_client():
@@ -273,6 +272,7 @@ def train_model_one_round(global_model_info):
     optimizer = get_optimizer(model)
     loss_function = get_loss_function()
     model.train()
+
     for _ in range(training_config.get("local_epochs", 1)):  # 进行多轮本地训练
         for data, target in data_loader:
             # data = data.view(data.shape[0], -1)
@@ -282,10 +282,11 @@ def train_model_one_round(global_model_info):
             loss = loss_function(output, target)
             loss.backward()
             optimizer.step()
-    test_model(model,current_round)
+    
+    test_model(model, loss_function, current_round)
     return {k: v.tolist() for k, v in model.state_dict().items()}
 
-def test_model(model,current_round):
+def test_model(model, loss_function, current_round):
     """
     在测试数据集上测试给定的模型状态字典, 根据training_config.get("metrics")中的选项保存测试结果。
     input: model_state_dict (dict): 模型状态字典。
@@ -297,16 +298,23 @@ def test_model(model,current_round):
 
     y_true = []
     y_pred = []
-
+    test_loss = 0  # 初始化测试损失
     with torch.no_grad():
         for data, target in test_loader:
             outputs = model(data)
             _, predicted = torch.max(outputs.data, 1)
+            loss = loss_function(outputs, target)  
+            test_loss += loss.item()
             y_true.extend(target.tolist())
             y_pred.extend(predicted.tolist())
+    
+    test_loss /= len(test_loader)  # 计算平均损失
 
     metrics = training_config.get("metrics", [])
     results = {}
+
+    if "Loss" in metrics:
+        results = {'Loss': test_loss}  # 将损失添加到结果字典中
 
     if "Accuracy" in metrics:
         # correct = sum([1 for true, pred in zip(y_true, y_pred) if true == pred])
