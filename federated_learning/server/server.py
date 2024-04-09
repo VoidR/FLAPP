@@ -25,18 +25,19 @@ global_model = None
 client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
+current_round = None
 # 训练配置
-model_config = ["NN", "ResNet20", "MLP","LR","LeNet","AlexNet"]
-dataset_config = ["MNIST", "CIFAR10","Iris"]
+model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet"]
+dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Precision", "Recall", "F1"]
 
 training_config = {
-  "model":"AlexNet",
-  "dataset":"CIFAR10",
+  "model":"NN",
+  "dataset":"MNIST",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
-  "metrics":["Accuracy", "Precision", "Recall", "F1"],
-  "global_epochs":1200,
+  "metrics":["Accuracy"],
+  "global_epochs":60,
   "local_epochs":1,
   "batch_size":64,
   "learning_rate":0.001,
@@ -73,7 +74,8 @@ def init_model():
     dim_in = None
     num_classes = None
     if training_config.get("dataset") == "MNIST":
-        dim_in = 28
+        dim_in = 28*28
+        num_channels = 1
         num_classes = 10
     elif training_config.get("dataset") == "CIFAR10":
         num_channels = 3
@@ -81,6 +83,13 @@ def init_model():
     elif training_config.get("dataset") == "Iris":
         dim_in = 4
         num_classes = 3
+    elif training_config.get("dataset") == "Wine":
+        dim_in = 13
+        num_classes = 3
+    elif training_config.get("dataset") == "Breast_cancer":
+        dim_in = 30
+        num_classes = 2
+
     if training_config.get("model") == "NN":
         model = SimpleModel(dim_in, num_classes)
     elif training_config.get("model") == "ResNet20":
@@ -148,6 +157,18 @@ def unregister_client(client_id):
             print(f"Client ID {client_id} not found for unregistration.")
             return jsonify({"message": "Client ID not found."}), 404
 
+@app.route('api/update_training_config', methods=['POST'])
+def update_training_config():
+    """
+    更新训练配置。
+    返回:
+        Flask Response: 包含更新后的训练配置的JSON响应。
+    """
+    global training_config
+    new_training_config = request.json
+    training_config = new_training_config
+    return jsonify(training_config), 200
+
 @app.route('/api/start_training', methods=['GET'])
 def start_training():
     """
@@ -155,6 +176,8 @@ def start_training():
     返回:
         Flask Response: 表示训练开始的JSON响应。
     """
+    global current_round
+    current_round = 0
     start_training_thread = threading.Thread(target=start_training_rounds, args=(training_config["global_epochs"],))
     start_training_thread.start()
     return jsonify({"message": "Training started."}), 200
@@ -165,10 +188,11 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
     参数:
         rounds (int): 训练轮数。
     """
-    global global_model
+    global global_model, current_round
     if global_model is None:
         global_model = init_model()
     for round_number in range(1, rounds + 1):
+        current_round = round_number
         with ThreadPoolExecutor(max_workers=len(client_registry)) as executor:
             future_to_client_id = {
                 executor.submit(train_client_model, client_id, client_info, round_number): client_id
@@ -207,6 +231,22 @@ def train_client_model(client_id, client_info, current_round):
 def print_client_count():
     client_count = len(client_registry)
     print("client_count: ",client_count)
+
+# 获取当前训练状态
+@app.route('/api/get_training_status', methods=['GET'])
+def get_training_status():
+    """
+    获取当前训练状态，是否正在训练,训练是否结束。
+    返回:
+        Flask Response: 包含当前训练状态的JSON响应。
+    """
+    global current_round
+    if current_round is None:
+        return jsonify({"training_status": "Not started", "current_round": None}), 200
+    elif current_round == training_config["global_epochs"]:
+        return jsonify({"training_status": "Completed", "current_round": current_round}), 200
+    else:
+        return jsonify({"training_status": "In progress", "current_round": current_round}), 200
 
 if __name__ == '__main__':
     # init_db()

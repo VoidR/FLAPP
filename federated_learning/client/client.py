@@ -86,7 +86,8 @@ def get_model():
     dim_in = None
     num_classes = None
     if training_config.get("dataset") == "MNIST":
-        dim_in = 28
+        dim_in = 28*28
+        num_channels = 1
         num_classes = 10
     elif training_config.get("dataset") == "CIFAR10":
         num_channels = 3
@@ -94,6 +95,13 @@ def get_model():
     elif training_config.get("dataset") == "Iris":
         dim_in = 4
         num_classes = 3
+    elif training_config.get("dataset") == "Wine":
+        dim_in = 13
+        num_classes = 3
+    elif training_config.get("dataset") == "Breast_cancer":
+        dim_in = 30
+        num_classes = 2
+
     if training_config.get("model") == "NN":
         model = SimpleModel(dim_in, num_classes)
     elif training_config.get("model") == "ResNet20":
@@ -101,7 +109,7 @@ def get_model():
     elif training_config.get("model") == "LR":
         model = LogisticRegressionModel(dim_in, num_classes)
     elif training_config.get("model") == "LeNet":
-        model = LeNet(dim_out=num_classes)
+        model = LeNet(dim_in=num_channels,dim_out=num_classes)
     elif training_config.get("model") == "AlexNet":
         model = AlexNet(num_classes=num_classes)
 
@@ -177,6 +185,16 @@ def load_data(train=True):
         data_tensor = torch.tensor(iris.data, dtype=torch.float32)
         target_tensor = torch.tensor(iris.target, dtype=torch.long)
         # 创建TensorDataset
+        dataset = TensorDataset(data_tensor, target_tensor)
+    elif training_config.get("dataset") == "Wine":
+        wine_dataset = skdatasets.load_wine()
+        data_tensor = torch.tensor(wine_dataset.data, dtype=torch.float32)
+        target_tensor = torch.tensor(wine_dataset.target, dtype=torch.long)
+        dataset = TensorDataset(data_tensor, target_tensor)
+    elif training_config.get("dataset") == "Breast_cancer":
+        breast_cancer_dataset = skdatasets.load_breast_cancer()
+        data_tensor = torch.tensor(breast_cancer_dataset.data, dtype=torch.float32)
+        target_tensor = torch.tensor(breast_cancer_dataset.target, dtype=torch.long)
         dataset = TensorDataset(data_tensor, target_tensor)
     else:
         raise ValueError("Unsupported dataset. Please choose either 'MNIST' or 'CIFAR10'.")
