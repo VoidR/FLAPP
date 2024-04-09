@@ -3,9 +3,9 @@ from torch.nn.functional import max_pool2d, relu
  
  
 class LeNet(nn.Module):
-    def __init__(self,dim_out=10):
+    def __init__(self, dim_in=1, dim_out=10):
         super(LeNet, self).__init__()
-        self.Conv1 = nn.Conv2d(1, 6, 5)
+        self.Conv1 = nn.Conv2d(dim_in, 6, 5)
         self.Conv2 = nn.Conv2d(6, 16, 5)
         self.Conv3 = nn.Linear(16 * 4 * 4, 120)
         self.fc1 = nn.Linear(120, 64)

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 class SimpleModel(nn.Module):
     def __init__(self, dim_in, dim_out):
         super(SimpleModel, self).__init__()
-        self.fc1 = nn.Linear(dim_in*dim_in, 128)  # MNIST images are 28x28 pixels
+        self.fc1 = nn.Linear(dim_in, 128)  # MNIST images are 28x28 pixels
         self.fc2 = nn.Linear(128, dim_out)     # 10 classes for MNIST digits
 
     def forward(self, x):
