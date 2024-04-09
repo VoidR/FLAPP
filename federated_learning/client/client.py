@@ -347,6 +347,22 @@ def test_model(model, loss_function, current_round):
         results['Round'] = current_round
         writer.writerow(results)
 
+@app.route('/api/get_metrics', methods=['GET'])
+def get_metrics():
+    """
+    API端点，用于获取模型评估指标。
+    input: 无
+    output: JSON响应，包含模型评估指标。
+    """
+    metrics = {}
+    with open('results.csv', 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            round_num = row['Round']
+            del row['Round']
+            metrics[round_num] = row
+
+    return jsonify(metrics)
 
 def apply_security_measures(model_update):
     """
