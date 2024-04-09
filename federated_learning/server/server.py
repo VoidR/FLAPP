@@ -29,14 +29,14 @@ current_round = None
 # 训练配置
 model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet"]
 dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
-metrics_config = ["Accuracy", "Precision", "Recall", "F1"]
+metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
   "model":"NN",
   "dataset":"MNIST",
   "optimizer":"Adam",
   "loss":"CrossEntropy",
-  "metrics":["Accuracy"],
+  "metrics":["Accuracy","Loss"],
   "global_epochs":60,
   "local_epochs":1,
   "batch_size":64,
@@ -157,7 +157,7 @@ def unregister_client(client_id):
             print(f"Client ID {client_id} not found for unregistration.")
             return jsonify({"message": "Client ID not found."}), 404
 
-@app.route('api/update_training_config', methods=['POST'])
+@app.route('/api/update_training_config', methods=['POST'])
 def update_training_config():
     """
     更新训练配置。
