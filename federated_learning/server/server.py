@@ -3,19 +3,12 @@ import requests
 import torch
 from flask import Flask, request, jsonify
 
-# from federated_learning.models import *
-from federated_learning.models.LogisticRegression import LogisticRegressionModel
-from federated_learning.models.SimpleModel import SimpleModel
-from federated_learning.models.ResNet import resnet20
-from federated_learning.models.LeNet import LeNet
-from federated_learning.models.AlexNet import AlexNet
-
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 # import sqlite3
 # import pickle
-
+import federated_learning.models.model_processing as model_processing
 
 app = Flask(__name__)
 
@@ -65,43 +58,6 @@ training_config = {
 #         conn.commit()
 
 
-def init_model():
-    """
-    初始化全局模型。
-    返回:
-        dict: 模型的初始状态字典，键为层名，值为权重和偏置的列表。
-    """
-    dim_in = None
-    num_classes = None
-    if training_config.get("dataset") == "MNIST":
-        dim_in = 28*28
-        num_channels = 1
-        num_classes = 10
-    elif training_config.get("dataset") == "CIFAR10":
-        num_channels = 3
-        num_classes = 10
-    elif training_config.get("dataset") == "Iris":
-        dim_in = 4
-        num_classes = 3
-    elif training_config.get("dataset") == "Wine":
-        dim_in = 13
-        num_classes = 3
-    elif training_config.get("dataset") == "Breast_cancer":
-        dim_in = 30
-        num_classes = 2
-
-    if training_config.get("model") == "NN":
-        model = SimpleModel(dim_in, num_classes)
-    elif training_config.get("model") == "ResNet20":
-        model = resnet20(num_classes=10, num_channels=3)
-    elif training_config.get("model") == "LR":
-        model = LogisticRegressionModel(dim_in, num_classes)
-    elif training_config.get("model") == "LeNet":
-        model = LeNet(dim_out=num_classes)
-    elif training_config.get("model") == "AlexNet":
-        model = AlexNet(num_classes=num_classes)
-    return {k: v.tolist() for k, v in model.state_dict().items()}
-
 def aggregate_model_updates(model_updates, round_number):
     """
     聚合来自多个客户端的模型更新。
@@ -120,7 +76,9 @@ def aggregate_model_updates(model_updates, round_number):
     with open('federated_learning/server/training_log.txt', 'a') as log_file:
         log_file.write(f'Round {round_number}: Aggregation completed.\n')
     print(f'Round {round_number}: Aggregation completed.')
-    return {k: v.tolist() for k, v in aggregated_update.items()}
+    # return {k: v.tolist() for k, v in aggregated_update.items()}
+    # return model_processing.tensor_to_list(aggregated_update)
+    return aggregated_update
 
 @app.route('/api/register_client', methods=['POST'])
 def register_client():
@@ -190,7 +148,7 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
     """
     global global_model, current_round
     if global_model is None:
-        global_model = init_model()
+        global_model = model_processing.get_model(training_config)
     for round_number in range(1, rounds + 1):
         current_round = round_number
         with ThreadPoolExecutor(max_workers=len(client_registry)) as executor:
@@ -203,7 +161,9 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
                 model_update = future.result()
                 if model_update is not None:
                     model_updates.append(model_update)
-            global_model = aggregate_model_updates(model_updates, round_number) #todo:客户端上传的json中包含当前轮数
+            # global_model.load_state_dict() = aggregate_model_updates(model_updates, round_number) #todo:客户端上传的json中包含当前轮数
+            global_model.load_state_dict(aggregate_model_updates(model_updates, round_number)) #todo:客户端上传的json中包含当前轮数
+
     # Save the final model
     torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
@@ -219,7 +179,7 @@ def train_client_model(client_id, client_info, current_round):
     """
     client_url_train = f"{client_info['client_url']}/api/train_model"
     try:
-        response = requests.post(client_url_train, json={"global_model": global_model, "current_round": current_round})
+        response = requests.post(client_url_train, json={"global_model": model_processing.tensor_to_list(global_model.state_dict()), "current_round": current_round})
         if response.status_code == 200:
             return response.json()['model_update']
     except requests.exceptions.RequestException as e:
