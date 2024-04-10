@@ -223,3 +223,20 @@ def tensor_to_list(state_dict):
     """
     return {k: v.tolist() for k, v in state_dict.items()}
     
+def tensors_to_lists(obj):
+    """
+    递归地将给定对象中的所有Tensor对象转换为列表。
+    支持的对象类型包括字典、列表和Tensor。
+    """
+    if isinstance(obj, dict):
+        # 如果对象是字典，对每个键值对应用相同的处理
+        return {k: tensors_to_lists(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        # 如果对象是列表，对每个元素应用相同的处理
+        return [tensors_to_lists(e) for e in obj]
+    elif isinstance(obj, torch.Tensor):
+        # 如果对象是Tensor，转换为列表
+        return obj.tolist()
+    else:
+        # 如果对象既不是字典、列表也不是Tensor，直接返回
+        return obj

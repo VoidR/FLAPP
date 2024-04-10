@@ -39,6 +39,17 @@ __all__ = ['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1
 
 import numpy as np
 
+def get_device():
+    """
+    获取可用的设备
+    input: 无
+    output: torch.device
+    """
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+
 def generate_normal(size=100, num_k=3):
 	vals = []
 	num_c = 100
@@ -122,20 +133,20 @@ class Linear(nn.Module):
 
 
     def randomize(self, last_r = None, set_r = None):
-
+        
         if set_r is None:
-            self.rc = torch.rand(self.fc.weight.size(0))
+            self.rc = torch.rand(self.fc.weight.size(0)).to(device)
 
         else:
             self.rc = set_r
 
         if last_r is None:
-            self.r = torch.einsum('i,j->ij', self.rc, torch.ones(self.fc.weight.size(1)))
+            self.r = torch.einsum('i,j->ij', self.rc, torch.ones(self.fc.weight.size(1)).to(get_device()))
         else:
             self.r = torch.einsum('i,j->ij', self.rc, 1. / last_r.repeat(int(self.num_in / last_r.size(0)), 1).t().reshape(-1))
         # print ('r last : ', self.r.max(), self.r.min())
         # if self.last:
-        self.a, self.b, self.gamma = torch.rand(self.num_out) * 1e-1, torch.zeros(self.num_out), torch.rand(2)  
+        self.a, self.b, self.gamma = torch.rand(self.num_out).to(get_device()) * 1e-1, torch.zeros(self.num_out).to(get_device()), torch.rand(2).to(get_device())  
 
         self.rcls = self.a * self.gamma[0] + self.b * self.gamma[1]
 
@@ -194,7 +205,7 @@ class Conv2d(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, stride=1, padding=0, bias=False):
         super(Conv2d, self).__init__()
         self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=kernel_size, stride=stride, padding=padding, bias=False)
-        self.id_filter = torch.randn(out_channel,out_channel,1,1); self.id_filter[:, :, 0, 0] = torch.eye(out_channel)
+        self.id_filter = torch.randn(out_channel,out_channel,1,1).to(get_device()); self.id_filter[:, :, 0, 0] = torch.eye(out_channel).to(get_device())
         # print (self.id_filter)
         self.in_channel, self.out_channel = in_channel, out_channel
         
@@ -204,36 +215,38 @@ class Conv2d(nn.Module):
         self.x0 = x
         self.y = self.conv(x)
         self.y0 = self.y
+
         self.y = F.conv2d(self.y, self.id_filter, padding=0)
         return self.y
 
     def randomize(self, last_r = None, set_r = None):
+
         if last_r is None:
-            # self.rc = 1e-2 * (torch.rand(self.out_channel) * 0.5 + 1.5)
-            rc0 = rand(self.out_channel, 2) * 1e-2 + 1e-8
+            # self.rc = 1e-2 * (torch.rand(self.out_channel).to(get_device()) * 0.5 + 1.5)
+            rc0 = rand(self.out_channel, 2).to(get_device()) * 1e-2 + 1e-8
         else:
-            rc0 = rand(self.out_channel, 3) * 1e-2 + 1e-8
+            rc0 = rand(self.out_channel, 3).to(get_device()) * 1e-2 + 1e-8
 
         if set_r is None:
-            # rc1 = torch.rand(self.out_channel) + 1e-8
-            rc1 = 1. / rand(self.out_channel, 3) * 1e-2 + 1e-8
-            # rc1 = rand(self.out_channel, 3) + 1e-8
+            # rc1 = torch.rand(self.out_channel).to(get_device()) + 1e-8
+            rc1 = 1. / rand(self.out_channel, 3).to(get_device()) * 1e-2 + 1e-8
+            # rc1 = rand(self.out_channel, 3).to(get_device()) + 1e-8
             # assert (2 * last_r.min().item() > last_r.max().item())
-            # self.rc = torch.rand(self.out_channel) * (2 * last_r.min() - last_r.max()) + last_r.max()
+            # self.rc = torch.rand(self.out_channel).to(get_device()) * (2 * last_r.min() - last_r.max()) + last_r.max()
             # print (self.rc.max(), self.rc.min())
             # assert()
         else:
             rc1 = set_r
         # rc0 = rc1
         if last_r is None:
-            self.r = torch.einsum('i,j->ij', rc0, torch.ones(self.in_channel))
+            self.r = torch.einsum('i,j->ij', rc0, torch.ones(self.in_channel).to(get_device()))
         else:
             self.r = torch.einsum('i,j->ij', rc0, 1. / last_r)
 
-        self.id_filter = torch.randn(self.out_channel,self.out_channel,1,1); self.id_filter[:, :, 0, 0] = torch.eye(self.out_channel)
+        self.id_filter = torch.randn(self.out_channel,self.out_channel,1,1).to(get_device()); self.id_filter[:, :, 0, 0] = torch.eye(self.out_channel).to(get_device())
         # print (self.id_filter)
         self.id_filter = torch.einsum('i,j->ij', rc1, 1. / rc0).unsqueeze(-1).unsqueeze(-1) * self.id_filter
-        self.id_filter = torch.autograd.Variable(self.id_filter, requires_grad=False)
+        self.id_filter = torch.autograd.Variable(self.id_filter, requires_grad=False).to(get_device())
         # print ('r conv : ', self.r.max(), self.r.min())
         # if last_r is not None:
         #     print (last_r.size(), self.r.size(), self.conv.weight.size())
@@ -404,10 +417,11 @@ class ResNet(nn.Module):
             r = self.layer3[i].randomize(r)
         self.r4 = r
 
-        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)))
+        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)).to(get_device()))
 
         self.rcls = self.linear.rcls
-        self.q = torch.rand(self.cls_num)
+        self.q = torch.rand(self.cls_num).to(get_device())
+
 
 
     def correction(self):
@@ -472,7 +486,7 @@ class ResNet(nn.Module):
 
         opt.zero_grad()
 
-        logits.backward(torch.einsum('c,k->kc', self.q, torch.ones(batch_size)), retain_graph=True)
+        logits.backward(torch.einsum('c,k->kc', self.q, torch.ones(batch_size).to(get_device())), retain_graph=True)
         for m in self.named_modules():
             if type(m[1]) is Linear or type(m[1]) is Conv2d:
                 m[1].beta = m[1].get_grad() / batch_size
@@ -495,10 +509,10 @@ class ResNet(nn.Module):
         batch_size, cls_num = logits.size()
         logits_exp = torch.exp(logits)
        
-        self.i1c_lambda = torch.zeros(batch_size, cls_num) 
+        self.i1c_lambda = torch.zeros(batch_size, cls_num).to(get_device()) 
         self.i1c_mu = self.i1c_lambda.unsqueeze(-1) + torch.einsum('kl,kj->klj', logits_exp, 1. / logits_exp).permute(0,2,1)
         
-        mask = torch.diag(torch.ones(cls_num))
+        mask = torch.diag(torch.ones(cls_num)).to(get_device())
         self.i1c_mu = self.i1c_mu * (1 - mask)
         self.alpha = self.y_last.view(batch_size, -1).sum(dim=-1)
 
@@ -513,18 +527,18 @@ class ResNet(nn.Module):
         i1c_mu, alpha = recv
         batch_size, cls_num, _ = i1c_mu.size()
 
-        self.i1s_delta = torch.zeros(cls_num) 
+        self.i1s_delta = torch.zeros(cls_num).to(get_device()) 
         diff = self.rcls.unsqueeze(0).repeat(cls_num, 1) - self.rcls.unsqueeze(-1)
         
         self.i1s_r = self.i1s_delta.unsqueeze(0).unsqueeze(-1) - diff.unsqueeze(0) * alpha.unsqueeze(-1).unsqueeze(-1)
         
-        mask = torch.diag(torch.ones(cls_num))
+        mask = torch.diag(torch.ones(cls_num)).to(get_device())
         self.i1s_r = self.i1s_r * (1 - mask)
 
         self.i1s_yhat = torch.exp(self.i1s_delta).unsqueeze(0) + torch.sum(i1c_mu * torch.exp(self.i1s_r), dim=-1)
 
         i1s_r_sum = torch.exp(self.i1s_r)
-        mask = torch.diag(torch.ones(cls_num))
+        mask = torch.diag(torch.ones(cls_num)).to(get_device())
         i1s_r_sum = i1s_r_sum * (1 - mask)
        
         self.i1s_r_sum = torch.sum(i1s_r_sum, dim=-1)
@@ -559,9 +573,9 @@ class ResNet(nn.Module):
                         m[1].rectify_grad / appro_norm, m[1].sigma_conv_a / appro_norm, m[1].sigma_conv_b / appro_norm, m[1].beta / appro_norm
 
                     if type(m[1]) is Conv2d:
-                        noise = rand(1, 5, False) * 5e-1
+                        noise = rand(1, 5, False).to(get_device()) * 5e-1
                     else:
-                        noise = rand(1, 5, False) * 0
+                        noise = rand(1, 5, False).to(get_device()) * 0
 
                     m[1].rectify_grad += noise
                     m[1].post_data = (m[1].sigma_conv_a, m[1].sigma_conv_b, m[1].beta)
@@ -654,10 +668,10 @@ class LeNet5(nn.Module):
         r = self.r3
         self.r4 = self.fc2.randomize(r)
         # print ('r4 : ', self.r4.max(), self.r4.min())
-        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)))
+        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)).to(get_device()))
 
         self.rcls = self.linear.rcls
-        self.q = torch.rand(self.cls_num)
+        self.q = torch.rand(self.cls_num).to(get_device())
 
 def letnet5():
     return LeNet5()

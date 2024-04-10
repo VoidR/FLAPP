@@ -187,13 +187,14 @@ def apply_security_measures(local_updated_model):
             model_update[m_n]["post_data"] = m.post_data
             model_update[m_n]["grad"] = m.get_grad()
             model_update[m_n]["r"] = m.get_r()
-            
+        model_update = model_processing.tensors_to_lists(model_update)
+
     if training_config.get("protect_client_model") == True:
         if training_config['client_use_differential_privacy']:
             dp_params = training_config['differential_privacy']
             # 应用差分隐私机制，比如添加高斯噪声
             model_update = dp_protection(local_updated_model, dp_params)
-
+            model_update = model_processing.tensor_to_list(model_update.state_dict())
     # 将来可能添加其他安全措施
     return model_update
 
