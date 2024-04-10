@@ -160,10 +160,10 @@ def test_model(model, training_config, loss_function, current_round,save_file='r
     input: model_state_dict (dict): 模型状态字典。
     """
     # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
-
-    test_loader = load_test_data(training_config)
-    model.eval()
     device = get_device()
+    test_loader = load_test_data(training_config)
+    model = model.to(device)
+    model.eval()
     y_true = []
     y_pred = []
     test_loss = 0  # 初始化测试损失

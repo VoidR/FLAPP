@@ -181,6 +181,7 @@ def apply_security_measures(local_updated_model):
     model_update = {}
     if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
         for m_n, m in local_updated_model.fl_modules().items():
+            model_update[m_n] = {}
             model_update["gamma"] = local_updated_model.gamma
             model_update["v"] = local_updated_model.v
             model_update[m_n]["post_data"] = m.post_data
