@@ -1,4 +1,3 @@
-
 '''
 Properly implemented ResNet-s for CIFAR10 as described in paper [1].
 
@@ -35,13 +34,39 @@ import torch.nn.init as init
 
 from torch.autograd import Variable
 
-__all__ = ['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1202']
+
+__all__ = ['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1202','letnet5']
+
+import numpy as np
+
+def generate_normal(size=100, num_k=3):
+	vals = []
+	num_c = 100
+
+	d = np.array([[2. * j + 1 for j in range(1, num_c + 1)]])
+	ln = np.array([[1. / (2 * num_k) * np.log(1 + 1. / j) for j in range(1, num_c + 1)]])
+	
+	s1 = np.random.gamma(1. / (num_k), 1, [size, num_c])
+	r = 2 * ((np.random.uniform(0., 1., size) > 0.5).astype(np.float64) - 0.5)
+	# print (s1.shape, r.shape, (s1 / d - ln).sum(axis = -1).shape, np.exp(np.log(2) / 4 - np.random.gamma(0.5, 1, [size]) - (s1 / d - ln).sum(axis = -1)).shape)
+	v1 = r * np.exp(np.log(2) / (2. * num_k) - np.random.gamma(1. / num_k, 1, [size]) - (s1 / d - ln).sum(axis = -1))
+
+	# s2 = np.random.gamma(0.5, 1, [size, num_c])
+	# r = 2 * ((np.random.uniform(0., 1., size) > 0.5).astype(np.float) - 0.5)
+	# v2 = r * np.exp(np.log(2) / 4 - np.random.gamma(0.5, 1, [size]) - (s2 / d - ln).sum(axis = -1))
+	
+	# vs += v1 * v2
+
+	return v1
 
 def _weights_init(m):
     classname = m.__class__.__name__
     #print(classname)
     if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
-        init.kaiming_normal_(m.weight)
+    # if isinstance(m, nn.Linear):
+        init.xavier_uniform_(m.weight)
+        # nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
+        # init.kaiming_normal(m.weight)
 
 class LambdaLayer(nn.Module):
     def __init__(self, lambd):
@@ -74,6 +99,17 @@ def _post(y_logit, y_gt, y_last, global_var, y_current, weight):
 
     return sigma_conv_a / batch_size, sigma_conv_b / batch_size, beta / batch_size
 
+def rand(size, num_k=3, abs=True):
+    mode = 1
+
+    if mode == 0:
+        rv = torch.rand(size)
+    else:
+        rv = torch.Tensor(generate_normal(size, num_k))
+        if abs:
+            rv = rv.abs()
+    return rv
+
 class Linear(nn.Module):
 
     def __init__(self, num_in, num_out):
@@ -84,46 +120,22 @@ class Linear(nn.Module):
         self.y = self.fc(x)
         return self.y
 
-    # def randomize(self, last_r = None, set_r = None):
-
-    #     if set_r is None:
-    #         self.rc1 = torch.ones(self.fc.weight.size(0)).to(0) + 1e-5
-    #     else:
-    #         self.rc1 = set_r
-        
-    #     if last_r is None:
-    #         self.r1 = torch.einsum('i,j->ij', self.rc1, torch.ones(self.fc.weight.size(1)).to(0))
-    #     else:
-    #         self.r1 = torch.einsum('i,j->ij', self.rc1, 1. / last_r.repeat(int(self.num_in / last_r.size(0)), 1).t().reshape(-1))
-
-    #     self.a, self.b, self.gamma = torch.rand(self.num_out).to(0) + 1e-5, torch.rand(self.num_out).to(0) + 1e-5, torch.rand(2).to(0)  + 1e-5
-    #     self.gamma[1] = 0
-    #     self.rcls = self.a * self.gamma[0] + self.b * self.gamma[1]
-    #     self.v = torch.sum(self.rcls ** 2)
-
-    #     self.fc.weight = torch.nn.Parameter(self.r1 * self.fc.weight + self.rcls.view(-1, 1))
-
-    #     return self.a, self.b, self.gamma, self.v
 
     def randomize(self, last_r = None, set_r = None):
 
         if set_r is None:
-            self.rc = torch.rand(self.fc.weight.size(0)).to(0)
-            # if last_r is None:
-            #     self.rc = torch.rand(self.out_channel).to(0) * 0.5 + 1.5
-            # else:
-            #     assert (2 * last_r.min().item() > last_r.max().item())
-            #     self.rc = torch.rand(self.out_channel).to(0) * (2 * last_r.min() - last_r.max()) + last_r.max()
+            self.rc = torch.rand(self.fc.weight.size(0))
+
         else:
             self.rc = set_r
 
         if last_r is None:
-            self.r = torch.einsum('i,j->ij', self.rc, torch.ones(self.fc.weight.size(1)).to(0))
+            self.r = torch.einsum('i,j->ij', self.rc, torch.ones(self.fc.weight.size(1)))
         else:
             self.r = torch.einsum('i,j->ij', self.rc, 1. / last_r.repeat(int(self.num_in / last_r.size(0)), 1).t().reshape(-1))
         # print ('r last : ', self.r.max(), self.r.min())
         # if self.last:
-        self.a, self.b, self.gamma = torch.rand(self.num_out).to(0) * 1e-1, torch.zeros(self.num_out).to(0), torch.rand(2).to(0)  
+        self.a, self.b, self.gamma = torch.rand(self.num_out) * 1e-1, torch.zeros(self.num_out), torch.rand(2)  
 
         self.rcls = self.a * self.gamma[0] + self.b * self.gamma[1]
 
@@ -146,17 +158,7 @@ class Linear(nn.Module):
         sigma_conv_b = torch.einsum('i,kj->kij', b, sigma_conv).sum(dim=0)
 
         self.post_data = sigma_conv_a / batch_size, sigma_conv_b / batch_size
-        
 
-    # def correction(self, gamma, v, post_data, grad, r):
-
-    #     sigma_conv_a, sigma_conv_b = post_data
-    #     sigma_conv = gamma[0] * sigma_conv_a + gamma[1] * sigma_conv_b
-        
-    #     delta_conv1 = sigma_conv
-
-    #     # self.fc.weight.grad = (self.fc.weight.grad - self.delta_conv1) * self.r1
-    #     return (grad - delta_conv1) * r
 
     def correction(self, gamma, v, post_data, grad, r):
         sigma_conv_a, sigma_conv_b, beta = post_data
@@ -192,45 +194,68 @@ class Conv2d(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, stride=1, padding=0, bias=False):
         super(Conv2d, self).__init__()
         self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=kernel_size, stride=stride, padding=padding, bias=False)
+        self.id_filter = torch.randn(out_channel,out_channel,1,1); self.id_filter[:, :, 0, 0] = torch.eye(out_channel)
+        # print (self.id_filter)
         self.in_channel, self.out_channel = in_channel, out_channel
+        
+        self.rc, self.r0 = 1., 1.
 
     def forward(self, x):
+        self.x0 = x
         self.y = self.conv(x)
+        self.y0 = self.y
+        self.y = F.conv2d(self.y, self.id_filter, padding=0)
         return self.y
 
     def randomize(self, last_r = None, set_r = None):
-        if set_r is None:
-            # self.rc = torch.rand(self.out_channel).to(0) + 1e-5
-            if last_r is None:
-                self.rc = 1e-2 * (torch.rand(self.out_channel).to(0) * 0.5 + 1.5)
-            else:
-                assert (2 * last_r.min().item() > last_r.max().item())
-                self.rc = torch.rand(self.out_channel).to(0) * (2 * last_r.min() - last_r.max()) + last_r.max()
-                # print (self.rc.max(), self.rc.min())
-                # assert()
-        else:
-            self.rc = set_r
-        
         if last_r is None:
-            self.r = torch.einsum('i,j->ij', self.rc, torch.ones(self.in_channel).to(0))
+            # self.rc = 1e-2 * (torch.rand(self.out_channel) * 0.5 + 1.5)
+            rc0 = rand(self.out_channel, 2) * 1e-2 + 1e-8
         else:
-            self.r = torch.einsum('i,j->ij', self.rc, 1. / last_r)
+            rc0 = rand(self.out_channel, 3) * 1e-2 + 1e-8
+
+        if set_r is None:
+            # rc1 = torch.rand(self.out_channel) + 1e-8
+            rc1 = 1. / rand(self.out_channel, 3) * 1e-2 + 1e-8
+            # rc1 = rand(self.out_channel, 3) + 1e-8
+            # assert (2 * last_r.min().item() > last_r.max().item())
+            # self.rc = torch.rand(self.out_channel) * (2 * last_r.min() - last_r.max()) + last_r.max()
+            # print (self.rc.max(), self.rc.min())
+            # assert()
+        else:
+            rc1 = set_r
+        # rc0 = rc1
+        if last_r is None:
+            self.r = torch.einsum('i,j->ij', rc0, torch.ones(self.in_channel))
+        else:
+            self.r = torch.einsum('i,j->ij', rc0, 1. / last_r)
+
+        self.id_filter = torch.randn(self.out_channel,self.out_channel,1,1); self.id_filter[:, :, 0, 0] = torch.eye(self.out_channel)
+        # print (self.id_filter)
+        self.id_filter = torch.einsum('i,j->ij', rc1, 1. / rc0).unsqueeze(-1).unsqueeze(-1) * self.id_filter
+        self.id_filter = torch.autograd.Variable(self.id_filter, requires_grad=False)
         # print ('r conv : ', self.r.max(), self.r.min())
         # if last_r is not None:
         #     print (last_r.size(), self.r.size(), self.conv.weight.size())
         self.conv.weight = torch.nn.Parameter(self.conv.weight * self.r.unsqueeze(-1).unsqueeze(-1))
+        
+        # print ('Conv max min', rc1.max(), rc1.min())
+
+        self.r0 = rc0
+        self.rc = rc1
         
         return self.rc
 
     def post(self, y_logit, y_gt, y_last, global_var):
 
         self.post_data = _post(y_logit, y_gt, y_last, global_var, self.y, self.conv.weight)
-
+        
 
     def correction(self, gamma, v, post_data, grad, r):
         sigma_conv_a, sigma_conv_b, beta = post_data
 
         # print (((grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r.unsqueeze(-1).unsqueeze(-1)).norm())
+        # print ('What is the grad : ',  grad.norm(), sigma_conv_a.norm(), sigma_conv_b.norm(), beta.norm(), ((grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r.unsqueeze(-1).unsqueeze(-1)).norm())
         return (grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r.unsqueeze(-1).unsqueeze(-1)
 
 
@@ -285,9 +310,13 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
+        self.o1 = out
         out = self.bn2(self.conv2(out))
+        self.o2 = out
         out += self.shortcut(x)
+        self.s = out
         out = F.relu(out)
+        self.out = out
         return out
 
     def randomize(self, last_r):
@@ -322,15 +351,15 @@ class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_channels=3, num_classes=10):
         super(ResNet, self).__init__()
         self.cls_num = num_classes
-        self.in_planes = 16
+        self.in_planes = 16 
 
-        self.conv1 = Conv2d(num_channels, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = Conv2d(num_channels, 16 , kernel_size=3, stride=1, padding=1, bias=False)
         # self.bn1 = nn.BatchNorm2d(16)
         self.bn1 = nn.Sequential()
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.linear = Linear(64, num_classes)
+        self.layer1 = self._make_layer(block, 16 , num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 32 , num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 64 , num_blocks[2], stride=2)
+        self.linear = Linear(64 , num_classes)
 
         self.apply(_weights_init)
 
@@ -344,12 +373,16 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = self.conv1(x)
-        out = F.relu(self.bn1(out))
+        out = F.relu(self.bn1(self.conv1(x)))
+        self.y0 = out
         out = self.layer1(out)
+        self.y1 = out
         out = self.layer2(out)
+        self.y2 = out
         out = self.layer3(out)
+        self.y3 = out
         out = F.avg_pool2d(out, out.size()[3])
+        self.p = out
         out = out.view(out.size(0), -1)
         self.y_last = out
         out = self.linear(out)
@@ -371,10 +404,10 @@ class ResNet(nn.Module):
             r = self.layer3[i].randomize(r)
         self.r4 = r
 
-        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)).to(0))
+        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)))
 
         self.rcls = self.linear.rcls
-        self.q = torch.rand(self.cls_num).to(0)
+        self.q = torch.rand(self.cls_num)
 
 
     def correction(self):
@@ -388,6 +421,8 @@ class ResNet(nn.Module):
             self.layer3[i].correction(self.gamma, self.v)
         self.linear.correction(self.gamma, self.v)
 
+        # self.linear.y -= torch.einsum('c,k->kc', self.linear.rcls, self.alpha).view(self.linear.y.size())
+        # self.conv1.y = torch.einsum('kchw,c->kchw', self.conv1.y, 1. /self.conv1.rc)
 
     def post_temp(self, grad_L2ylast):
 
@@ -413,20 +448,31 @@ class ResNet(nn.Module):
         y_last.backward(torch.einsum('k,kl->kl', torch.einsum('kc,c->k', grad_L2ylast, self.a), torch.ones_like(y_last)), retain_graph=True)
         for m in self.named_modules():
             if type(m[1]) is Linear or type(m[1]) is Conv2d:
-                m[1].sigma_conv_a = (m[1].get_grad() / batch_size)
-                # m[1].sigma_conv_b = 0
+                # print(type(m[1]))
+                grad = m[1].get_grad()
+                if grad is not None:
+                    m[1].sigma_conv_a = grad / batch_size
+                else:
+                    m[1].sigma_conv_a = 0
+                    # print(f"No gradient for {m[0]}")
 
         opt.zero_grad()
         # y_last.backward(torch.einsum('k,kl->kl', torch.einsum('kc,c->k', self.q.unsqueeze(0).repeat(batch_size, 1), self.a), torch.ones_like(y_last)), retain_graph=True)
         y_last.backward((self.q * self.a).sum() * torch.ones_like(y_last), retain_graph=True)
         for m in self.named_modules():
             if type(m[1]) is Linear or type(m[1]) is Conv2d:
-                m[1].sigma_conv_b = (m[1].get_grad() / batch_size)
+                # m[1].sigma_conv_b = (m[1].get_grad() / batch_size)
+                grad = m[1].get_grad()
+                if grad is not None:
+                    m[1].sigma_conv_b = grad / batch_size
+                else:
+                    m[1].sigma_conv_b = 0
+                    # print(f"No gradient for {m[0]}")
 
 
         opt.zero_grad()
 
-        logits.backward(torch.einsum('c,k->kc', self.q, torch.ones(batch_size).to(0)), retain_graph=True)
+        logits.backward(torch.einsum('c,k->kc', self.q, torch.ones(batch_size)), retain_graph=True)
         for m in self.named_modules():
             if type(m[1]) is Linear or type(m[1]) is Conv2d:
                 m[1].beta = m[1].get_grad() / batch_size
@@ -448,17 +494,18 @@ class ResNet(nn.Module):
         logits = self.logits
         batch_size, cls_num = logits.size()
         logits_exp = torch.exp(logits)
-        
-        self.i1c_lambda = torch.zeros(batch_size, cls_num).to(0) 
+       
+        self.i1c_lambda = torch.zeros(batch_size, cls_num) 
         self.i1c_mu = self.i1c_lambda.unsqueeze(-1) + torch.einsum('kl,kj->klj', logits_exp, 1. / logits_exp).permute(0,2,1)
         
-        mask = torch.diag(torch.ones(cls_num)).to(0)
+        mask = torch.diag(torch.ones(cls_num))
         self.i1c_mu = self.i1c_mu * (1 - mask)
         self.alpha = self.y_last.view(batch_size, -1).sum(dim=-1)
 
         # return logits, self.alpha
         return self.i1c_mu, self.alpha
 
+   
 
     def interaction_1_s2c(self, recv):
         # Addtional Round 2: Server -> Client
@@ -466,18 +513,18 @@ class ResNet(nn.Module):
         i1c_mu, alpha = recv
         batch_size, cls_num, _ = i1c_mu.size()
 
-        self.i1s_delta = torch.zeros(cls_num).to(0) 
+        self.i1s_delta = torch.zeros(cls_num) 
         diff = self.rcls.unsqueeze(0).repeat(cls_num, 1) - self.rcls.unsqueeze(-1)
         
         self.i1s_r = self.i1s_delta.unsqueeze(0).unsqueeze(-1) - diff.unsqueeze(0) * alpha.unsqueeze(-1).unsqueeze(-1)
         
-        mask = torch.diag(torch.ones(cls_num)).to(0)
+        mask = torch.diag(torch.ones(cls_num))
         self.i1s_r = self.i1s_r * (1 - mask)
 
         self.i1s_yhat = torch.exp(self.i1s_delta).unsqueeze(0) + torch.sum(i1c_mu * torch.exp(self.i1s_r), dim=-1)
 
         i1s_r_sum = torch.exp(self.i1s_r)
-        mask = torch.diag(torch.ones(cls_num)).to(0)
+        mask = torch.diag(torch.ones(cls_num))
         i1s_r_sum = i1s_r_sum * (1 - mask)
        
         self.i1s_r_sum = torch.sum(i1s_r_sum, dim=-1)
@@ -487,42 +534,36 @@ class ResNet(nn.Module):
 
 
     
-    def post(self, y_gt, diff):
+    def post(self, y_gt, diff=False):
         i1c_mu, alpha = self.interaction_1_c2s()
         i1s_yhat, i1s_r_sum = self.interaction_1_s2c((i1c_mu, alpha))
-        # print ('i1s_yhat : ', i1s_yhat.norm())
+        if len(y_gt.shape) == 1:
+            y_gt = F.one_hot(y_gt, num_classes=i1s_yhat.shape[1])
         grad_L2ylast = i1s_yhat - y_gt
+        # print("i1s_yhat:",i1s_yhat.shape)
+        # print("y_gt:",y_gt.shape)
         self.post_temp(grad_L2ylast)
 
         if diff:
+            # print ('diff of what')
             for m in self.named_modules():
                 if type(m[1]) is Linear or type(m[1]) is Conv2d:
                     if type(m[1]) is Linear:
                         r_max, r_min = m[1].r.max(), m[1].r.min()
-                        # r_max, r_min = 2., 1.
                     else:
                         r_max, r_min = m[1].r.max(), m[1].r.min()
-                        # r_max, r_min = 2., 1.
 
                     appro_norm = r_max * (m[1].rectify_grad.abs().max() + m[1].sigma_conv_a.abs().max() + m[1].sigma_conv_b.abs().max() + m[1].beta.abs().max())
                     # appro_norm = 2.
                     m[1].rectify_grad, m[1].sigma_conv_a, m[1].sigma_conv_b, m[1].beta = \
                         m[1].rectify_grad / appro_norm, m[1].sigma_conv_a / appro_norm, m[1].sigma_conv_b / appro_norm, m[1].beta / appro_norm
-                    
-                    if type(m[1]) is Linear:
-                        # sigma_d, sigma_eta = 1., 1.
-                        sigma_d, sigma_eta = 1. / r_min, 1. / r_min 
-                    else:
-                        # sigma_d, sigma_eta = 1., 1. 
-                        sigma_d, sigma_eta = 1. / r_min, 1. / r_min
 
                     if type(m[1]) is Conv2d:
-                        noise = torch.distributions.normal.Normal(0., 5e-1 * sigma_eta).sample() 
+                        noise = rand(1, 5, False) * 5e-1
                     else:
-                        noise = torch.distributions.normal.Normal(0., 5e-1 * sigma_eta).sample() 
+                        noise = rand(1, 5, False) * 0
 
                     m[1].rectify_grad += noise
-
                     m[1].post_data = (m[1].sigma_conv_a, m[1].sigma_conv_b, m[1].beta)
 
     def fl_modules(self):
@@ -570,6 +611,56 @@ def test(net):
     print("Total number of params", total_params)
     print("Total layers", len(list(filter(lambda p: p.requires_grad and len(p.data.size())>1, net.parameters()))))
 
+# 定义LeNet-5架构的神经网络类
+class LeNet5(nn.Module):
+    def __init__(self, num_classes=7):
+        super(LeNet5, self).__init__()
+        self.cls_num = num_classes
+
+        # 第一卷积层：输入1通道（灰度图像），输出6通道，卷积核大小为5x5
+        self.conv1 = Conv2d(3, 6, kernel_size=5, stride=1, padding=1, bias=False)
+        # 第一池化层：最大池化，池化窗口大小为2x2，步幅为2
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # 第二卷积层：输入6通道，输出16通道，卷积核大小为5x5
+        self.conv2 = Conv2d(6, 16, kernel_size=5, stride=1, padding=1, bias=False)
+        # 第二池化层：最大池化，池化窗口大小为2x2，步幅为2
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # 第一个全连接层：输入维度是16*4*4，输出维度是120
+        self.fc1 = Linear(16 * 4 * 4, 120)
+        # 第二个全连接层：输入维度是120，输出维度是84
+        self.fc2 = Linear(120, 84)
+        # 第三个全连接层：输入维度是84，输出维度是10，对应10个类别
+        self.fc3 = Linear(84, num_classes)
+
+        self.apply(_weights_init)
+
+    def forward(self, x):
+        # 前向传播函数定义网络的数据流向
+        x = self.pool1(torch.relu(self.conv1(x)))
+        x = self.pool2(torch.relu(self.conv2(x)))
+        x = x.view(-1, 16 * 4 * 4)
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+    
+    def randomize(self):
+        self.r1 = self.conv1.randomize()
+        r = self.r1
+        
+        self.r2 = self.conv2.randomize(r)
+        r = self.r2
+        self.r3 = self.fc1.randomize(r)
+        r = self.r3
+        self.r4 = self.fc2.randomize(r)
+        # print ('r4 : ', self.r4.max(), self.r4.min())
+        self.a, self.b, self.gamma, self.v = self.linear.randomize(self.r4, torch.ones(self.linear.fc.weight.size(0)))
+
+        self.rcls = self.linear.rcls
+        self.q = torch.rand(self.cls_num)
+
+def letnet5():
+    return LeNet5()
 
 if __name__ == "__main__":
     for net_name in __all__:

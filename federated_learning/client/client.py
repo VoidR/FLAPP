@@ -39,6 +39,7 @@ def get_local_ip():
         s.close()
     return IP
 
+
 # 配置变量
 server_url = args.server
 # server_url = "http://192.168.1.115:5000"
@@ -106,9 +107,9 @@ def train_model():
     """
     received_data = request.json
 
-    local_model_update = train_model_one_round(received_data)
+    local_updated_model = train_model_one_round(received_data)
     
-    local_model_update = apply_security_measures(local_model_update)
+    local_model_update = apply_security_measures(local_updated_model)
 
     return jsonify({"model_update": local_model_update})
 
@@ -121,19 +122,17 @@ def train_model_one_round(global_model_info):
     """
     global_model_state_dict = global_model_info['global_model']
     current_round = global_model_info["current_round"]
-
+    device = model_processing.get_device()
     print("开始训练，全局轮数:", current_round)
     model = model_processing.get_model(training_config)  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
-
-    # 检查是否有可用的CUDA
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-
     # 将模型移动到正确的设备
     model.to(device)
+
+    # 目前扰动放在客户端 todo：改为服务器扰动。。。
+    if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
+        model.randomize()
+
 
     data_loader = model_processing.load_data(training_config, train=True)
     optimizer = model_processing.get_optimizer(model,training_config)
@@ -145,74 +144,17 @@ def train_model_one_round(global_model_info):
             # data = data.view(data.shape[0], -1)
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
-            output = model(data)
-            loss = loss_function(output, target)
+            # output = model(data)
+
+            loss = loss_function(model(data), target)
+            if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
+                model.post(target)
             loss.backward()
             optimizer.step()
-    
-    test_model(model, loss_function, current_round)
-    return {k: v.tolist() for k, v in model.state_dict().items()}
+    if not training_config.get("protect_global_model"):
+        model_processing.test_model(model, training_config, loss_function, current_round)
+    return model
 
-def test_model(model, loss_function, current_round):
-    """
-    在测试数据集上测试给定的模型状态字典, 根据training_config.get("metrics")中的选项保存测试结果。
-    input: model_state_dict (dict): 模型状态字典。
-    """
-    # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
-
-    test_loader = model_processing.load_test_data(training_config)
-    model.eval()
-
-    y_true = []
-    y_pred = []
-    test_loss = 0  # 初始化测试损失
-    with torch.no_grad():
-        for data, target in test_loader:
-            outputs = model(data)
-            _, predicted = torch.max(outputs.data, 1)
-            loss = loss_function(outputs, target)  
-            test_loss += loss.item()
-            y_true.extend(target.tolist())
-            y_pred.extend(predicted.tolist())
-    
-    test_loss /= len(test_loader)  # 计算平均损失
-
-    metrics = training_config.get("metrics", [])
-    results = {}
-
-    if "Loss" in metrics:
-        results = {'Loss': test_loss}  # 将损失添加到结果字典中
-
-    if "Accuracy" in metrics:
-        # correct = sum([1 for true, pred in zip(y_true, y_pred) if true == pred])
-        # total = len(y_true)
-        # accuracy = correct / total
-        accuracy = accuracy_score(y_true, y_pred)
-        results['Accuracy'] = accuracy
-
-    if "Precision" in metrics:
-        precision = precision_score(y_true, y_pred, average='weighted')
-        results['Precision'] = precision
-
-    if "Recall" in metrics:
-        recall = recall_score(y_true, y_pred, average='weighted')
-        results['Recall'] = recall
-
-    if "F1" in metrics:
-        f1 = f1_score(y_true, y_pred, average='weighted')
-        results['F1'] = f1
-
-    file_exists = os.path.isfile('results.csv')
-    # 将结果写入CSV文件
-    with open('results.csv', 'a+', newline='') as csvfile:
-        fieldnames = ['Round'] + metrics
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        if not file_exists:
-            writer.writeheader()
-
-        results['Round'] = current_round
-        writer.writerow(results)
 
 @app.route('/api/get_metrics', methods=['GET'])
 def get_metrics():
@@ -231,15 +173,26 @@ def get_metrics():
 
     return jsonify(metrics)
 
-def apply_security_measures(model_update):
+def apply_security_measures(local_updated_model):
     """
     应用安全措施到模型更新，当前使用差分隐私。
     可以在这里添加更多的安全措施。
     """
-    if training_config['client_use_differential_privacy']:
-        dp_params = training_config['differential_privacy']
-        # 应用差分隐私机制，比如添加高斯噪声
-        model_update = dp_protection(model_update, dp_params)
+    model_update = {}
+    if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
+        for m_n, m in local_updated_model.fl_modules().items():
+            model_update["gamma"] = local_updated_model.gamma
+            model_update["v"] = local_updated_model.v
+            model_update[m_n]["post_data"] = m.post_data
+            model_update[m_n]["grad"] = m.get_grad()
+            model_update[m_n]["r"] = m.get_r()
+            
+    if training_config.get("protect_client_model") == True:
+        if training_config['client_use_differential_privacy']:
+            dp_params = training_config['differential_privacy']
+            # 应用差分隐私机制，比如添加高斯噪声
+            model_update = dp_protection(local_updated_model, dp_params)
+
     # 将来可能添加其他安全措施
     return model_update
 

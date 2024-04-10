@@ -25,21 +25,23 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-  "model":"NN",
-  "dataset":"MNIST",
-  "optimizer":"Adam",
-  "loss":"CrossEntropy",
-  "metrics":["Accuracy","Loss"],
-  "global_epochs":60,
-  "local_epochs":1,
-  "batch_size":64,
-  "learning_rate":0.001,
-  "client_use_differential_privacy": True,
-  "differential_privacy": {
-    "epsilon": 1.0,   
-    "delta": 1e-5,  
-    "sensitivity": 1.0 
-  }
+    "model":"ResNet20",
+    "dataset":"CIFAR10",
+    "optimizer":"SGD",
+    "loss":"CrossEntropy",
+    "metrics":["Accuracy","Loss"],
+    "global_epochs":10,
+    "local_epochs":1,
+    "batch_size":64,
+    "learning_rate":0.001,
+    "client_use_differential_privacy": False,
+    "differential_privacy": {
+        "epsilon": 1.0,   
+        "delta": 1e-5,  
+        "sensitivity": 1.0 
+    },
+    "protect_global_model": True,
+    "protect_client_models": False
 }
 
 # DATABASE_PATH = 'federated_learning/server/federated_learning.db'
@@ -66,15 +68,31 @@ def aggregate_model_updates(model_updates, round_number):
     返回:
         dict: 聚合后的模型更新，格式与单个模型更新相同。
     """
-    aggregated_update = {k: torch.zeros_like(torch.tensor(v)) for k, v in model_updates[0].items()}
-    for update in model_updates:
-        for k, v in update.items():
-            aggregated_update[k] += torch.tensor(v)
+    global global_model
     num_updates = len(model_updates)
-    aggregated_update = {k: v / num_updates for k, v in aggregated_update.items()}
+    aggregated_update = {}
+    if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:  
+        # 初始模型
+        current_modules = global_model.fl_modules()
+        counter = 1 
+        for client_model in model_updates:
+            for m_n, m in current_modules.fl_modules().items():
+                current_layer = current_modules[m_n]
+                current_layer.aggregate_grad(current_layer.correction(client_model["gamma"], client_model["v"], client_model[m_n]["post_data"], client_model[m_n]["grad"], client_model[m_n]["r"]), counter)
+            counter += 1
+        # for m in global_model.fl_modules().items():
+        #     m[1].update(float(training_config.get("learning_rate",0.001)) / counter)
+        aggregated_update = {k: v / num_updates for k, v in global_model.state_dict().items()}
+    else:
+        aggregated_update = {k: torch.zeros_like(torch.tensor(v)) for k, v in model_updates[0].items()}
+        for update in model_updates:
+            for k, v in update.items():
+                aggregated_update[k] += torch.tensor(v)
+        
+        aggregated_update = {k: v / num_updates for k, v in aggregated_update.items()}
     # Log aggregation result
-    with open('federated_learning/server/training_log.txt', 'a') as log_file:
-        log_file.write(f'Round {round_number}: Aggregation completed.\n')
+    # with open('federated_learning/server/training_log.txt', 'a') as log_file:
+    #     log_file.write(f'Round {round_number}: Aggregation completed.\n')
     print(f'Round {round_number}: Aggregation completed.')
     # return {k: v.tolist() for k, v in aggregated_update.items()}
     # return model_processing.tensor_to_list(aggregated_update)
@@ -163,7 +181,7 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
                     model_updates.append(model_update)
             # global_model.load_state_dict() = aggregate_model_updates(model_updates, round_number) #todo:客户端上传的json中包含当前轮数
             global_model.load_state_dict(aggregate_model_updates(model_updates, round_number)) #todo:客户端上传的json中包含当前轮数
-
+        model_processing.test_model(global_model, training_config, model_processing.get_loss_function(training_config), round_number,save_file='federated_learning/server/results.csv')
     # Save the final model
     torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
@@ -177,9 +195,19 @@ def train_client_model(client_id, client_info, current_round):
     返回:
         dict: 客户端返回的模型更新；如果请求失败，返回None。
     """
+    global global_model
     client_url_train = f"{client_info['client_url']}/api/train_model"
+
+    # 在使用ResNet20模型，并需要保护全局模型时，加扰动
+    if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:  
+        distribute_model = global_model
+        distribute_model.randomize()
+        model_dict = model_processing.tensor_to_list(distribute_model.state_dict())
+    else:
+        model_dict = model_processing.tensor_to_list(global_model.state_dict())
+
     try:
-        response = requests.post(client_url_train, json={"global_model": model_processing.tensor_to_list(global_model.state_dict()), "current_round": current_round})
+        response = requests.post(client_url_train, json={"global_model": model_dict, "current_round": current_round})
         if response.status_code == 200:
             return response.json()['model_update']
     except requests.exceptions.RequestException as e:
