@@ -22,6 +22,16 @@ from federated_learning.models.LogisticRegression import LogisticRegressionModel
 from federated_learning.models.LeNet import LeNet
 from federated_learning.models.AlexNet import AlexNet
 
+def get_device():
+    """
+    获取可用的设备
+    input: 无
+    output: torch.device
+    """
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
 
 def get_model(training_config):
     """
@@ -32,12 +42,14 @@ def get_model(training_config):
     dim_in = None
     num_classes = None
     if training_config.get("dataset") == "MNIST":
-        dim_in = 28*28
+        img_size = 28
         num_channels = 1
         num_classes = 10
+        dim_in = img_size*img_size
     elif training_config.get("dataset") == "CIFAR10":
         num_channels = 3
         num_classes = 10
+        img_size = 32
     elif training_config.get("dataset") == "Iris":
         dim_in = 4
         num_classes = 3
@@ -55,7 +67,7 @@ def get_model(training_config):
     elif training_config.get("model") == "LR":
         model = LogisticRegressionModel(dim_in, num_classes)
     elif training_config.get("model") == "LeNet":
-        model = LeNet(dim_in=num_channels,dim_out=num_classes)
+        model = LeNet(dim_in=num_channels,dim_out=num_classes,img_size=img_size)
     elif training_config.get("model") == "AlexNet":
         model = AlexNet(num_classes=num_classes)
 
@@ -141,6 +153,68 @@ def get_loss_function(training_config):
         return F.cross_entropy
     # 添加其他损失函数的处理逻辑
     return F.cross_entropy  # 默认返回交叉熵损失函数
+
+def test_model(model, training_config, loss_function, current_round,save_file='results.csv'):
+    """
+    在测试数据集上测试给定的模型状态字典, 根据training_config.get("metrics")中的选项保存测试结果。
+    input: model_state_dict (dict): 模型状态字典。
+    """
+    # 此处的测试逻辑可能需要根据training_config中的metrics进行调整，以支持不同的评估指标
+
+    test_loader = load_test_data(training_config)
+    model.eval()
+    device = get_device()
+    y_true = []
+    y_pred = []
+    test_loss = 0  # 初始化测试损失
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            outputs = model(data)
+            _, predicted = torch.max(outputs.data, 1)
+            loss = loss_function(outputs, target)  
+            test_loss += loss.item()
+            y_true.extend(target.tolist())
+            y_pred.extend(predicted.tolist())
+    
+    test_loss /= len(test_loader)  # 计算平均损失
+
+    metrics = training_config.get("metrics", [])
+    results = {}
+
+    if "Loss" in metrics:
+        results = {'Loss': test_loss}  # 将损失添加到结果字典中
+
+    if "Accuracy" in metrics:
+        # correct = sum([1 for true, pred in zip(y_true, y_pred) if true == pred])
+        # total = len(y_true)
+        # accuracy = correct / total
+        accuracy = accuracy_score(y_true, y_pred)
+        results['Accuracy'] = accuracy
+
+    if "Precision" in metrics:
+        precision = precision_score(y_true, y_pred, average='weighted')
+        results['Precision'] = precision
+
+    if "Recall" in metrics:
+        recall = recall_score(y_true, y_pred, average='weighted')
+        results['Recall'] = recall
+
+    if "F1" in metrics:
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        results['F1'] = f1
+
+    file_exists = os.path.isfile(save_file)
+    # 将结果写入CSV文件
+    with open(save_file, 'a+', newline='') as csvfile:
+        fieldnames = ['Round'] + metrics
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        results['Round'] = current_round
+        writer.writerow(results)
 
 
 def tensor_to_list(state_dict):
