@@ -1,6 +1,9 @@
 #FLAPP/federated_learning/client/client.py
+
 import os
 import csv
+import json
+import time
 import torch
 import logging
 import requests
@@ -9,10 +12,13 @@ import socket
 import argparse
 # import sqlite3
 
+
 from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
 from federated_learning.client.utils.DP import dp_protection
 import federated_learning.models.model_processing as model_processing
+
+
 
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='客户端启动配置')
@@ -65,6 +71,32 @@ training_config = {}
 #   }
 # }
 
+# 计算时间统计
+computation_time_stats = {
+    "train_time": []
+}
+communication_stats = {
+    "data_sent": [],
+    "data_received": []
+}
+
+def save_stats():
+    """
+    保存时间和通信统计数据到CSV文件。
+    """
+    
+    with open('federated_learning/client/computation_time_stats.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["train_time"])
+        for t in computation_time_stats["train_time"]:
+            writer.writerow([t])
+
+    with open('federated_learning/client/communication_stats.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["data_sent", "data_received"])
+        for s, r in zip(communication_stats["data_sent"], communication_stats["data_received"]):
+            writer.writerow([s, r])
+
 def register_client():
     """
     向服务器注册客户端，以参与联邦学习。
@@ -106,11 +138,16 @@ def train_model():
     output: JSON响应，包含本地模型更新和准确率。
     """
     received_data = request.json
+    communication_stats["data_received"].append(len(json.dumps(received_data).encode('utf-8')))
 
+    start_training_time = time.time()
     local_updated_model = train_model_one_round(received_data)
+    end_training_time = time.time()
+    computation_time_stats["train_time"].append(end_training_time - start_training_time)
     
     local_model_update = apply_security_measures(local_updated_model)
 
+    communication_stats["data_sent"].append(len(json.dumps(local_model_update).encode('utf-8')))
     return jsonify({"model_update": local_model_update})
 
 
@@ -126,6 +163,8 @@ def train_model_one_round(global_model_info):
     print("开始训练，全局轮数:", current_round)
     model = model_processing.get_model(training_config)  # 此处应根据training_config['model']选择不同的模型
     model.load_state_dict({k: torch.tensor(v) for k, v in global_model_state_dict.items()})
+
+
     # 将模型移动到正确的设备
     model.to(device)
 
@@ -133,6 +172,8 @@ def train_model_one_round(global_model_info):
     if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
         model.randomize()
 
+    # 输出线性层是否会计算梯度
+    # print("before training,linear:", model.linear.fc.weight.requires_grad)
 
     data_loader = model_processing.load_data(training_config, train=True)
     optimizer = model_processing.get_optimizer(model,training_config)
@@ -147,8 +188,11 @@ def train_model_one_round(global_model_info):
             # output = model(data)
 
             loss = loss_function(model(data), target)
+            # print("after loss,linear:", model.linear.fc.weight.requires_grad)
             if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
                 model.post(target)
+            # print("after post,linear:", model.linear.fc.weight.requires_grad)
+                
             loss.backward()
             optimizer.step()
     if not training_config.get("protect_global_model"):
@@ -188,13 +232,14 @@ def apply_security_measures(local_updated_model):
             model_update[m_n]["grad"] = m.get_grad()
             model_update[m_n]["r"] = m.get_r()
         model_update = model_processing.tensors_to_lists(model_update)
-
-    if training_config.get("protect_client_model") == True:
+    elif training_config.get("protect_client_model") == True:
         if training_config['client_use_differential_privacy']:
             dp_params = training_config['differential_privacy']
             # 应用差分隐私机制，比如添加高斯噪声
             model_update = dp_protection(local_updated_model, dp_params)
             model_update = model_processing.tensor_to_list(model_update.state_dict())
+    else:
+        model_update = model_processing.tensor_to_list(local_updated_model.state_dict())
     # 将来可能添加其他安全措施
     return model_update
 
@@ -206,5 +251,6 @@ if __name__ == "__main__":
     try:
         app.run(host='0.0.0.0', port=client_port, debug=False)
     finally:
+        save_stats()
         unregister_client()  # 确保应用退出时注销客户端
     # mytest()

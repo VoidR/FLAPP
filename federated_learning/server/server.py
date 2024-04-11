@@ -25,12 +25,12 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"ResNet20",
+    "model":"LeNet",
     "dataset":"CIFAR10",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
-    "global_epochs":10,
+    "global_epochs":1200,
     "local_epochs":1,
     "batch_size":64,
     "learning_rate":0.001,
@@ -199,13 +199,14 @@ def train_client_model(client_id, client_info, current_round):
     client_url_train = f"{client_info['client_url']}/api/train_model"
 
     # 在使用ResNet20模型，并需要保护全局模型时，加扰动
-    if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:  
-        distribute_model = global_model
-        distribute_model.randomize()
-        model_dict = model_processing.tensor_to_list(distribute_model.state_dict())
-    else:
-        model_dict = model_processing.tensor_to_list(global_model.state_dict())
+    # if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:  
+    #     distribute_model = global_model
+    #     # distribute_model.randomize()
+    #     model_dict = model_processing.tensor_to_list(distribute_model.state_dict())
+    # else:
+    #     model_dict = model_processing.tensor_to_list(global_model.state_dict())
 
+    model_dict = model_processing.tensor_to_list(global_model.state_dict())
     try:
         response = requests.post(client_url_train, json={"global_model": model_dict, "current_round": current_round})
         if response.status_code == 200:
