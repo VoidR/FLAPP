@@ -13,6 +13,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # import pickle
 import federated_learning.models.model_processing as model_processing
 
+parser = argparse.ArgumentParser(description='服务器启动配置')
+parser.add_argument('-p', '--port', type=int, default=5000, help='服务器端口号，默认为5000')
+args = parser.parse_args()
+
 app = Flask(__name__)
 
 # 全局模型变量初始化
@@ -293,6 +297,6 @@ if __name__ == '__main__':
     # save_dir 创建
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=args.port, debug=False)
 
     # init_model()
