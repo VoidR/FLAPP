@@ -1,5 +1,6 @@
 #FLAPP/federated_learning/server/server.py
 import requests
+import time
 import torch
 from flask import Flask, request, jsonify
 
@@ -25,7 +26,7 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"LeNet",
+    "model":"ResNet20",
     "dataset":"CIFAR10",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
@@ -44,6 +45,10 @@ training_config = {
     "protect_client_models": False
 }
 
+aggregate_time_stats = {
+    "aggregate_time": []
+}
+
 # DATABASE_PATH = 'federated_learning/server/federated_learning.db'
 # def init_db():
     
@@ -58,6 +63,18 @@ training_config = {
 #         )
 #         ''')
 #         conn.commit()
+
+def save_stats():
+    """
+    保存时间和通信统计数据到CSV文件。
+    """
+    
+    with open('federated_learning/server/computation_time_stats.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["aggregate_time"])
+        for t in aggregate_time_stats["aggregate_time"]:
+            writer.writerow([t])
+
 
 
 def aggregate_model_updates(model_updates, round_number):
@@ -143,6 +160,13 @@ def update_training_config():
     global training_config
     new_training_config = request.json
     training_config = new_training_config
+
+    if len(client_registry) > 0:
+        for client_id, client_info in client_registry.items():
+            client_url_update = f"{client_info['client_url']}/api/update_training_config"
+            response = requests.post(client_url_update, json=training_config)
+            if response.status_code != 200:
+                print(f"Failed to update training config for client {client_id}.")
     return jsonify(training_config), 200
 
 @app.route('/api/start_training', methods=['GET'])
@@ -180,8 +204,12 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
                 if model_update is not None:
                     model_updates.append(model_update)
             # global_model.load_state_dict() = aggregate_model_updates(model_updates, round_number) #todo:客户端上传的json中包含当前轮数
+            start_agg_time = time.time()
             global_model.load_state_dict(aggregate_model_updates(model_updates, round_number)) #todo:客户端上传的json中包含当前轮数
+            end_agg_time = time.time()
+            aggregate_time_stats["aggregate_time"].append(end_training_time - start_training_time)
         model_processing.test_model(global_model, training_config, model_processing.get_loss_function(training_config), round_number,save_file='federated_learning/server/results.csv')
+    save_stats()
     # Save the final model
     torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
@@ -237,6 +265,15 @@ def get_training_status():
     else:
         return jsonify({"training_status": "In progress", "current_round": current_round}), 200
 
+# 获取训练配置
+@app.route('/api/get_training_config', methods=['GET'])
+def get_training_config():
+    """
+    获取当前训练配置。
+    返回:
+        Flask Response: 包含当前训练配置的JSON响应。
+    """
+    return jsonify(training_config), 200
 if __name__ == '__main__':
     # init_db()
     app.run(host='0.0.0.0', port=5000, debug=False)

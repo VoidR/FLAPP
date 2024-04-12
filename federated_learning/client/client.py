@@ -130,6 +130,18 @@ def unregister_client():
         print("客户端注销失败。")
         return False
 
+@app.route('/api/update_training_config', methods=['POST'])
+def update_training_config():
+    """
+    更新训练配置。
+    返回:
+        Flask Response: 包含更新后的训练配置的JSON响应。
+    """
+    global training_config
+    new_training_config = request.json
+    training_config = new_training_config
+    return jsonify(training_config), 200
+
 @app.route('/api/train_model', methods=['POST'])
 def train_model():
     """
