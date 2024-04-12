@@ -1,4 +1,6 @@
 #FLAPP/federated_learning/server/server.py
+import os
+import csv
 import requests
 import time
 import torch
@@ -20,18 +22,21 @@ client_registry = {}
 # 线程锁，确保对全局变量的操作是线程安全的
 lock = threading.Lock()
 current_round = None
+# 保存目录
+save_dir = f'federated_learning/server/save/{time.strftime("%Y%m%d-%H%M%S")}'
+
 # 训练配置
 model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet"]
 dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"ResNet20",
-    "dataset":"CIFAR10",
+    "model":"NN",
+    "dataset":"MNIST",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
-    "global_epochs":1200,
+    "global_epochs":10,
     "local_epochs":1,
     "batch_size":64,
     "learning_rate":0.001,
@@ -41,7 +46,7 @@ training_config = {
         "delta": 1e-5,  
         "sensitivity": 1.0 
     },
-    "protect_global_model": True,
+    "protect_global_model": False,
     "protect_client_models": False
 }
 
@@ -64,16 +69,19 @@ aggregate_time_stats = {
 #         ''')
 #         conn.commit()
 
-def save_stats():
+def save_stats(save_results):
     """
-    保存时间和通信统计数据到CSV文件。
+    保存统计信息到文件。
+    input: save_results(Dict) 当前轮次的统计信息
     """
-    
-    with open('federated_learning/server/computation_time_stats.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["aggregate_time"])
-        for t in aggregate_time_stats["aggregate_time"]:
-            writer.writerow([t])
+    save_file = f'{save_dir}/stats.csv'
+    file_exists = os.path.isfile(save_file)
+    with open(save_file, 'a+', newline='') as csvfile:
+        fieldnames = ['round', 'aggregate_time']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(save_results)
 
 
 
@@ -193,6 +201,8 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
         global_model = model_processing.get_model(training_config)
     for round_number in range(1, rounds + 1):
         current_round = round_number
+        save_results = {}
+        save_results["round"] = current_round
         with ThreadPoolExecutor(max_workers=len(client_registry)) as executor:
             future_to_client_id = {
                 executor.submit(train_client_model, client_id, client_info, round_number): client_id
@@ -207,9 +217,11 @@ def start_training_rounds(rounds=training_config["global_epochs"]):
             start_agg_time = time.time()
             global_model.load_state_dict(aggregate_model_updates(model_updates, round_number)) #todo:客户端上传的json中包含当前轮数
             end_agg_time = time.time()
-            aggregate_time_stats["aggregate_time"].append(end_training_time - start_training_time)
-        model_processing.test_model(global_model, training_config, model_processing.get_loss_function(training_config), round_number,save_file='federated_learning/server/results.csv')
-    save_stats()
+            save_results["aggregate_time"] = end_agg_time - start_agg_time
+            # aggregate_time_stats["aggregate_time"].append(end_agg_time - start_agg_time)
+        save_stats(save_results)
+        model_processing.test_model(global_model, training_config, model_processing.get_loss_function(training_config), round_number,save_file=f'{save_dir}/results.csv')
+        
     # Save the final model
     torch.save(global_model, 'federated_learning/server/final_model.pth')
     print("Training completed and model saved as final_model.pth")
@@ -274,8 +286,13 @@ def get_training_config():
         Flask Response: 包含当前训练配置的JSON响应。
     """
     return jsonify(training_config), 200
+
+
 if __name__ == '__main__':
     # init_db()
+    # save_dir 创建
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     app.run(host='0.0.0.0', port=5000, debug=False)
 
     # init_model()

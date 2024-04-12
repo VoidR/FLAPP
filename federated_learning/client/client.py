@@ -52,7 +52,8 @@ server_url = args.server
 client_IP = get_local_ip()
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
-
+# 根据时间戳创建保存目录
+save_dir = f'federated_learning/client/save/{time.strftime("%Y%m%d-%H%M%S")}'
 training_config = {}
 # training_config = {
 #   "model":"LR",
@@ -80,22 +81,21 @@ communication_stats = {
     "data_received": []
 }
 
-def save_stats():
+def save_stats(save_results):
     """
-    保存时间和通信统计数据到CSV文件。
+    保存统计信息到文件。
+    input: save_results(Dict) 当前轮次的统计信息
+    output: 无
     """
-    
-    with open('federated_learning/client/computation_time_stats.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["train_time"])
-        for t in computation_time_stats["train_time"]:
-            writer.writerow([t])
+    save_file = f'{save_dir}/stats.csv'
+    file_exists = os.path.isfile(save_file)
+    with open(save_file, 'a+', newline='') as csvfile:
+        fieldnames = ['round', 'train_time', 'data_sent', 'data_received']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(save_results)
 
-    with open('federated_learning/client/communication_stats.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["data_sent", "data_received"])
-        for s, r in zip(communication_stats["data_sent"], communication_stats["data_received"]):
-            writer.writerow([s, r])
 
 def register_client():
     """
@@ -150,16 +150,21 @@ def train_model():
     output: JSON响应，包含本地模型更新和准确率。
     """
     received_data = request.json
-    communication_stats["data_received"].append(len(json.dumps(received_data).encode('utf-8')))
+    save_results = {}
+    save_results["round"] = received_data["current_round"]
+    save_results["data_received"] = len(json.dumps(received_data).encode('utf-8'))
+    # communication_stats["data_received"].append(len(json.dumps(received_data).encode('utf-8')))
 
     start_training_time = time.time()
     local_updated_model = train_model_one_round(received_data)
     end_training_time = time.time()
-    computation_time_stats["train_time"].append(end_training_time - start_training_time)
-    
+    # computation_time_stats["train_time"].append(end_training_time - start_training_time)
+    save_results["train_time"] = end_training_time - start_training_time
     local_model_update = apply_security_measures(local_updated_model)
 
-    communication_stats["data_sent"].append(len(json.dumps(local_model_update).encode('utf-8')))
+    # communication_stats["data_sent"].append(len(json.dumps(local_model_update).encode('utf-8')))
+    save_results["data_sent"] = len(json.dumps(local_model_update).encode('utf-8'))
+    save_stats(save_results)
     return jsonify({"model_update": local_model_update})
 
 
@@ -208,7 +213,7 @@ def train_model_one_round(global_model_info):
             loss.backward()
             optimizer.step()
     if not training_config.get("protect_global_model"):
-        model_processing.test_model(model, training_config, loss_function, current_round)
+        model_processing.test_model(model, training_config, loss_function, current_round, save_file=f'{save_dir}/results.csv')
     return model
 
 
@@ -220,7 +225,7 @@ def get_metrics():
     output: JSON响应，包含模型评估指标。
     """
     metrics = {}
-    with open('results.csv', 'r') as csvfile:
+    with open(f'{save_dir}/results.csv', 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             round_num = row['Round']
@@ -259,10 +264,13 @@ def mytest():
     print(get_local_ip())
 
 if __name__ == "__main__":
+    # save_dir 创建
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     register_client()  # 注册客户端以获取ID
     try:
         app.run(host='0.0.0.0', port=client_port, debug=False)
     finally:
-        save_stats()
+        # save_stats()
         unregister_client()  # 确保应用退出时注销客户端
     # mytest()
