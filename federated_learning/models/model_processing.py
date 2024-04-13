@@ -66,7 +66,7 @@ def get_model(training_config):
     elif training_config.get("model") == "ResNet20":
         model = resnet20(num_classes=10, num_channels=3)
     elif training_config.get("model") == "LR":
-        model = LogisticRegressionModel(dim_in, num_classes)
+        model = LogisticRegressionModel(dim_in=dim_in, dim_out=num_classes)
     elif training_config.get("model") == "LeNet":
         model = LeNet(dim_in=num_channels,dim_out=num_classes,img_size=img_size)
     elif training_config.get("model") == "AlexNet":
