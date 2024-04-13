@@ -30,6 +30,9 @@ class AlexNet(nn.Module):
         )
 
     def forward(self, x):
+        # 如果输入只有一个通道（灰度图像），则复制该通道以创建3个通道
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
         x = self.features(x)
         x = x.view(x.size(0), 256 * 4 * 4)
         x = self.classifier(x)
