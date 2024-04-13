@@ -1,30 +1,27 @@
 import torch
 import torch.nn as nn
-
 class AlexNet(nn.Module):
-    def __init__(self, dim_in, num_classes, img_size):
+    def __init__(self, dim_in=3, num_classes=10, img_size=32):
         super(AlexNet, self).__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(dim_in, 64, kernel_size=11, stride=4, padding=2),
+            nn.Conv2d(dim_in, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 192, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(192, 384, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(384, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.MaxPool2d(kernel_size=2, stride=2),
         )
-        # 计算经过特征提取层后的图像大小
-        size_after_features = ((img_size - 11) // 4 + 1) // 2 // 2 // 2
-        self.avgpool = nn.AdaptiveAvgPool2d((size_after_features, size_after_features))
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(256 * size_after_features * size_after_features, 4096),
+            nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
