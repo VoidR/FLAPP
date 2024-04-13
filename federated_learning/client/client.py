@@ -12,12 +12,10 @@ import socket
 import argparse
 # import sqlite3
 
-
 from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
 from federated_learning.client.utils.DP import dp_protection
 import federated_learning.models.model_processing as model_processing
-
 
 
 # 解析命令行参数
@@ -81,6 +79,15 @@ communication_stats = {
     "data_received": []
 }
 
+def save_training_config():
+    """
+    保存训练配置到文件。
+    input: 无
+    output: 无
+    """
+    with open(f'{save_dir}/training_config.json', 'w') as f:
+        json.dump(training_config, f)
+
 def save_stats(save_results):
     """
     保存统计信息到文件。
@@ -108,6 +115,7 @@ def register_client():
         global client_id, training_config
         client_id = response.json()['client_id']
         training_config = response.json()['training_config']
+        save_training_config()
         print(f"注册成功，ID: {client_id}, 训练配置: {training_config}")
 
 def unregister_client():
@@ -140,6 +148,7 @@ def update_training_config():
     global training_config
     new_training_config = request.json
     training_config = new_training_config
+    save_training_config()
     return jsonify(training_config), 200
 
 @app.route('/api/train_model', methods=['POST'])

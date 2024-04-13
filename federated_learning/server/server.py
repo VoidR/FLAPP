@@ -36,12 +36,12 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"NN",
+    "model":"AlexNet",
     "dataset":"MNIST",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
-    "global_epochs":10,
+    "global_epochs":200,
     "local_epochs":1,
     "batch_size":64,
     "learning_rate":0.001,
@@ -88,7 +88,14 @@ def save_stats(save_results):
             writer.writeheader()
         writer.writerow(save_results)
 
-
+def save_training_config():
+    """
+    保存训练配置到文件。
+    input: 无
+    output: 无
+    """
+    with open(f'{save_dir}/training_config.json', 'w') as f:
+        json.dump(training_config, f)
 
 def aggregate_model_updates(model_updates, round_number):
     """
@@ -173,7 +180,7 @@ def update_training_config():
     global training_config
     new_training_config = request.json
     training_config = new_training_config
-
+    save_training_config()
     if len(client_registry) > 0:
         for client_id, client_info in client_registry.items():
             client_url_update = f"{client_info['client_url']}/api/update_training_config"
@@ -314,6 +321,7 @@ if __name__ == '__main__':
     # save_dir 创建
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+    save_training_config()
     app.run(host='0.0.0.0', port=args.port, debug=False)
 
     # init_model()
