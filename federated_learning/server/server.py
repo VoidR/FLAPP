@@ -1,6 +1,7 @@
 #FLAPP/federated_learning/server/server.py
 import os
 import csv
+import json
 import requests
 import time
 import argparse
