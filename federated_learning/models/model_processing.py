@@ -39,6 +39,7 @@ def get_model(training_config):
     input: 无
     output: 模型
     """
+    model = None
     dim_in = None
     num_classes = None
     if training_config.get("dataset") == "MNIST":
