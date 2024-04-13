@@ -70,7 +70,7 @@ def get_model(training_config):
     elif training_config.get("model") == "LeNet":
         model = LeNet(dim_in=num_channels,dim_out=num_classes,img_size=img_size)
     elif training_config.get("model") == "AlexNet":
-        model = AlexNet(num_classes=num_classes)
+        model = AlexNet(dim_in=num_channels,dim_out=num_classes,img_size=img_size)
 
     return model
 

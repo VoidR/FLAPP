@@ -2,10 +2,10 @@ import torch.nn as nn
 
 class AlexNet(nn.Module):
 
-    def __init__(self, num_classes):
+    def __init__(self, dim_in, num_classes, img_size):
         super(AlexNet, self).__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(dim_in, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(64, 192, kernel_size=3, stride=1, padding=1),
@@ -21,7 +21,7 @@ class AlexNet(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(256 * 4 * 4, 4096),
+            nn.Linear(256 * (img_size // 16) * (img_size // 16), 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
@@ -30,9 +30,6 @@ class AlexNet(nn.Module):
         )
 
     def forward(self, x):
-        # 如果输入只有一个通道（灰度图像），则复制该通道以创建3个通道
-        if x.shape[1] == 1:
-            x = x.repeat(1, 3, 1, 1)
         x = self.features(x)
         x = x.view(x.size(0), 256 * 4 * 4)
         x = self.classifier(x)
