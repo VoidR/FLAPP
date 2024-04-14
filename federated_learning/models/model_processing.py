@@ -8,6 +8,7 @@ from torchvision import datasets as torch_datasets
 from torch.utils.data import DataLoader, TensorDataset,random_split
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.nn as nn
 
 import argparse
 # import sqlite3
@@ -152,7 +153,7 @@ def get_optimizer(model,training_config):
     根据配置选择并返回优化器。
     """
     lr = training_config.get("learning_rate", 0.01)
-    if training_config.get("optimizer", "SGD") == "Adam":
+    if training_config.get("optimizer", "Adam") == "Adam":
         return optim.Adam(model.parameters(), lr=lr)
     else:  # 默认使用SGD
         return optim.SGD(model.parameters(), lr=lr)
@@ -162,9 +163,9 @@ def get_loss_function(training_config):
     根据配置返回损失函数。
     """
     if training_config.get("loss", "CrossEntropy") == "CrossEntropy":
-        return F.cross_entropy
+        return nn.CrossEntropyLoss()
     # 添加其他损失函数的处理逻辑
-    return F.cross_entropy  # 默认返回交叉熵损失函数
+    return nn.CrossEntropyLoss()  # 默认返回交叉熵损失函数
 
 def test_model(model, training_config, loss_function, current_round,save_file='results.csv'):
     """
@@ -252,3 +253,12 @@ def tensors_to_lists(obj):
     else:
         # 如果对象既不是字典、列表也不是Tensor，直接返回
         return obj
+
+
+def criterion(y_pred, y_cls):
+    c = torch.nn.CrossEntropyLoss()
+    # y_cls = torch.squeeze(y_cls, dim=1)
+    # print('y_cls',y_cls.shape)
+    # print('y_pred:',y_pred.shape,'y_cls:',y_cls.shape,'argmax:',torch.argmax(y_cls, dim = -1).shape)
+    # return c(y_pred, torch.argmax(y_cls, dim = -1))
+    return c(y_pred, y_cls)

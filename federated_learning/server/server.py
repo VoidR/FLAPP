@@ -37,9 +37,9 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"CNN",
+    "model":"ResNet20",
     "dataset":"CIFAR10",
-    "optimizer":"SGD",
+    "optimizer":"Adam",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
     "global_epochs":200,
@@ -52,7 +52,7 @@ training_config = {
         "delta": 1e-5,  
         "sensitivity": 1.0 
     },
-    "protect_global_model": False,
+    "protect_global_model": True,
     "protect_client_models": False
 }
 

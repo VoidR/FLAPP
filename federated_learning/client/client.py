@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify
 import socket
 import argparse
 # import sqlite3
+import torch.nn.functional as F
 
 from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
@@ -103,6 +104,7 @@ def save_stats(save_results):
         if not file_exists:
             writer.writeheader()
         writer.writerow(save_results)
+
 
 
 def register_client():
@@ -216,10 +218,15 @@ def train_model_one_round(global_model_info):
             optimizer.zero_grad()
             # output = model(data)
 
-            loss = loss_function(model(data), target)
-            # print("after loss,linear:", model.linear.fc.weight.requires_grad)
-            if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
+            if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True: # todo 
+                target = F.one_hot(target, num_classes=10).float()
+                # exit()
+                loss = model_processing.criterion(model(data), target)
                 model.post(target)
+            else:  
+                loss = loss_function(model(data), target)
+            # print("after loss,linear:", model.linear.fc.weight.requires_grad)
+                
             # print("after post,linear:", model.linear.fc.weight.requires_grad)
                 
             loss.backward()

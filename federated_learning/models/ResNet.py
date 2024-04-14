@@ -551,8 +551,8 @@ class ResNet(nn.Module):
     def post(self, y_gt, diff=False):
         i1c_mu, alpha = self.interaction_1_c2s()
         i1s_yhat, i1s_r_sum = self.interaction_1_s2c((i1c_mu, alpha))
-        if len(y_gt.shape) == 1:
-            y_gt = F.one_hot(y_gt, num_classes=i1s_yhat.shape[1])
+        # if len(y_gt.shape) == 1:
+        #     y_gt = F.one_hot(y_gt, num_classes=i1s_yhat.shape[1])
         grad_L2ylast = i1s_yhat - y_gt
         # print("i1s_yhat:",i1s_yhat.shape)
         # print("y_gt:",y_gt.shape)
