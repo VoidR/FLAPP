@@ -299,16 +299,23 @@ class Conv2d(nn.Module):
         return self.r
 
     def aggregate_grad(self, grad, counter):
-        grad = grad.to(get_device())
+        # 确保grad转移到合适的设备，并与权重的数据类型一致
+        grad = grad.to(device=self.conv.weight.device, dtype=self.conv.weight.dtype)
+        
+        # 如果当前没有梯度，则初始化一个全零梯度
         if self.conv.weight.grad is None:
-            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device(), dtype=self.conv.weight.dtype)
+            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=self.conv.weight.device, dtype=self.conv.weight.dtype)
+
+        # 尝试更新梯度
         try:
             self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
-        except TypeError as e:
-            print(f"类型异常: {e}")
-        except RuntimeError as e:
-            print(f"运行时异常: {e}")
-            self.conv.weight.grad = grad.to(self.conv.weight.grad.dtype)
+        except Exception as e:
+            # 如果发生任何异常，输出异常信息
+            print(f"发生异常: {e}")
+
+        # 输出当前梯度的设备和数据类型，用于调试
+        print(f"梯度设备: {self.conv.weight.grad.device}, 梯度数据类型: {self.conv.weight.grad.dtype}")
+
 
 
     def update(self, lr):
