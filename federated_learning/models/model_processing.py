@@ -265,6 +265,9 @@ def tensors_to_lists(obj):
     if isinstance(obj, dict):
         # 如果对象是字典，对每个键值对应用相同的处理
         return {k: tensors_to_lists(v) for k, v in obj.items()}
+    elif isinstance(obj, tuple):
+        # 如果对象是元组，对每个元素应用相同的处理
+        return tuple(tensors_to_lists(e) for e in obj)
     elif isinstance(obj, list):
         # 如果对象是列表，对每个元素应用相同的处理
         return [tensors_to_lists(e) for e in obj]
