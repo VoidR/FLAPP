@@ -14,6 +14,8 @@ import argparse
 # import sqlite3
 
 from sklearn import datasets as sk_datasets
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
 # from federated_learning.models import *
@@ -106,24 +108,43 @@ def load_data(training_config, train=True, client_count=1, client_index=0):
             transforms.Normalize(cifar10_means, cifar10_stds)
         ])
         dataset = torch_datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
-    elif training_config.get("dataset") == "Iris":
-        # 加载鸢尾花数据集
-        iris = sk_datasets.load_iris()
-        # 数据和标签转换为Tensor
-        data_tensor = torch.tensor(iris.data, dtype=torch.float32)
-        target_tensor = torch.tensor(iris.target, dtype=torch.long)
-        # 创建TensorDataset
-        dataset = TensorDataset(data_tensor, target_tensor)
-    elif training_config.get("dataset") == "Wine":
-        wine_dataset = sk_datasets.load_wine()
-        data_tensor = torch.tensor(wine_dataset.data, dtype=torch.float32)
-        target_tensor = torch.tensor(wine_dataset.target, dtype=torch.long)
-        dataset = TensorDataset(data_tensor, target_tensor)
-    elif training_config.get("dataset") == "Breast_cancer":
-        breast_cancer_dataset = sk_datasets.load_breast_cancer()
-        data_tensor = torch.tensor(breast_cancer_dataset.data, dtype=torch.float32)
-        target_tensor = torch.tensor(breast_cancer_dataset.target, dtype=torch.long)
-        dataset = TensorDataset(data_tensor, target_tensor)
+    elif training_config.get("dataset") in ["Iris", "Wine", "Breast_cancer"]:
+        if training_config.get("dataset") == "Iris":
+            data = sk_datasets.load_iris()
+        elif training_config.get("dataset") == "Wine":
+            data = sk_datasets.load_wine()
+        elif training_config.get("dataset") == "Breast_cancer":
+            data = sk_datasets.load_breast_cancer()
+
+        X_train, X_test, y_train, y_test = train_test_split(data.data, data.target, test_size=0.2, random_state=42)
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+
+        X_train = torch.tensor(X_train, dtype=torch.float32)
+        X_test = torch.tensor(X_test, dtype=torch.float32)
+        y_train = torch.tensor(y_train, dtype=torch.long)  
+        y_test = torch.tensor(y_test, dtype=torch.long)
+
+        if train:
+            dataset = TensorDataset(X_train, y_train)
+        else:
+            dataset = TensorDataset(X_test, y_test)
+    # elif training_config.get("dataset") == "Iris":
+    #     # 加载鸢尾花数据集
+    #     iris = sk_datasets.load_iris()
+    #     # 数据和标签转换为Tensor
+        
+    # elif training_config.get("dataset") == "Wine":
+    #     wine_dataset = sk_datasets.load_wine()
+    #     data_tensor = torch.tensor(wine_dataset.data, dtype=torch.float32)
+    #     target_tensor = torch.tensor(wine_dataset.target, dtype=torch.long)
+    #     dataset = TensorDataset(data_tensor, target_tensor)
+    # elif training_config.get("dataset") == "Breast_cancer":
+    #     breast_cancer_dataset = sk_datasets.load_breast_cancer()
+    #     data_tensor = torch.tensor(breast_cancer_dataset.data, dtype=torch.float32)
+    #     target_tensor = torch.tensor(breast_cancer_dataset.target, dtype=torch.long)
+    #     dataset = TensorDataset(data_tensor, target_tensor)
     else:
         raise ValueError("Unsupported dataset. Please choose either 'MNIST' or 'CIFAR10'.")
 

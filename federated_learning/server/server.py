@@ -37,22 +37,22 @@ dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"ResNet20",
-    "dataset":"CIFAR10",
-    "optimizer":"Adam",
+    "model":"LR",
+    "dataset":"Breast_cancer",
+    "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
     "global_epochs":200,
     "local_epochs":1,
     "batch_size":64,
-    "learning_rate":0.001,
+    "learning_rate":0.1,
     "client_use_differential_privacy": False,
     "differential_privacy": {
         "epsilon": 1.0,   
         "delta": 1e-5,  
         "sensitivity": 1.0 
     },
-    "protect_global_model": True,
+    "protect_global_model": False,
     "protect_client_models": False
 }
 
