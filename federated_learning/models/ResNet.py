@@ -194,17 +194,19 @@ class Linear(nn.Module):
     # def get_appro_norm(self):
     #     return self.rectify_grad.abs().max() + self.sigma_conv_a.abs().max() + self.sigma_conv_b.abs().max() + self.beta().abs().max()
 
+    
     def aggregate_grad(self, grad, counter):
         grad = grad.to(get_device())
-        if self.conv.weight.grad is None:
-            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device())
+        if self.fc.weight.grad is None:
+            self.fc.weight.grad = torch.zeros_like(self.fc.weight, device=get_device(), dtype=self.fc.weight.dtype)
         try:
-            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
+            self.fc.weight.grad = (self.fc.weight.grad * (counter - 1) + grad) / counter
         except TypeError as e:
-            print(f"Exception: {e}")
+            print(f"类型异常: {e}")
         except RuntimeError as e:
-            print(f"Exception: {e}")
-            self.conv.weight.grad = grad.to(self.conv.weight.grad.dtype)
+            print(f"运行时异常: {e}")
+            self.fc.weight.grad = grad.to(self.fc.weight.grad.dtype)
+
 
     def update(self, lr):
         self.fc.weight = nn.Parameter(self.fc.weight - self.fc.weight.grad * lr)
@@ -299,14 +301,15 @@ class Conv2d(nn.Module):
     def aggregate_grad(self, grad, counter):
         grad = grad.to(get_device())
         if self.conv.weight.grad is None:
-            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device())
+            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device(), dtype=self.conv.weight.dtype)
         try:
             self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
         except TypeError as e:
-            print(f"Exception: {e}")
+            print(f"类型异常: {e}")
         except RuntimeError as e:
-            print(f"Exception: {e}")
+            print(f"运行时异常: {e}")
             self.conv.weight.grad = grad.to(self.conv.weight.grad.dtype)
+
 
     def update(self, lr):
         self.conv.weight = nn.Parameter(self.conv.weight - self.conv.weight.grad * lr)
