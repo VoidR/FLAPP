@@ -32,13 +32,13 @@ current_round = None
 save_dir = f'federated_learning/server/save/{time.strftime("%Y%m%d-%H%M%S")}'
 
 # 训练配置
-model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet"]
+model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet","CNN"]
 dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
 
 training_config = {
-    "model":"AlexNet",
-    "dataset":"MNIST",
+    "model":"CNN",
+    "dataset":"CIFAR10",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
@@ -147,10 +147,11 @@ def register_client():
         client_data = request.json
         client_url= client_data['client_url']
         client_id = str(uuid.uuid4())
-        client_registry[client_id] = {"client_url": client_url, "last_update": None}
-        print(f"Client {client_id} registered with url {client_url}.")
+        client_index = len(client_registry) + 1
+        client_registry[client_id] = {"client_url": client_url, "last_update": None, "client_index": client_index}
+        print(f"Client {client_id} registered successfully with url {client_url}. index: {client_index}")
         print_client_count()
-    return jsonify({"client_id": client_id, "training_config": training_config}), 200
+    return jsonify({"client_id": client_id, "training_config": training_config, "client_index":client_index}), 200
 
 @app.route('/api/unregister_client/<client_id>', methods=['DELETE'])
 def unregister_client(client_id):
@@ -269,7 +270,16 @@ def train_client_model(client_id, client_info, current_round):
     return None
 
 # 查询当前客户端数量
-# @app.route('/api/get_client_count', methods=['GET'])
+@app.route('/api/get_client_count', methods=['GET'])
+def get_client_count():
+    """
+    查询当前客户端数量。
+    返回:
+        Flask Response: 包含当前客户端数量的JSON响应。
+    """
+    print_client_count()
+    return jsonify({"client_count": len(client_registry)}), 200
+
 def print_client_count():
     client_count = len(client_registry)
     print("client_count: ",client_count)

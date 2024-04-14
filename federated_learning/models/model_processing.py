@@ -3,15 +3,16 @@ import csv
 import torch
 import logging
 import requests
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, TensorDataset
+from torchvision import transforms
+from torchvision import datasets as torch_datasets
+from torch.utils.data import DataLoader, TensorDataset,random_split
 import torch.optim as optim
 import torch.nn.functional as F
 
 import argparse
 # import sqlite3
 
-from sklearn import datasets as skdatasets
+from sklearn import datasets as sk_datasets
 from sklearn.metrics import accuracy_score,precision_score, recall_score, f1_score
 
 # from federated_learning.models import *
@@ -77,7 +78,7 @@ def get_model(training_config):
     return model
 
 
-def load_data(training_config, train=True, client_count=1):
+def load_data(training_config, train=True, client_count=1, client_index=0):
     """
     加载数据集进行训练或测试。
     input: train (bool): 如果为True，则加载训练集，否则加载测试集。
@@ -97,35 +98,43 @@ def load_data(training_config, train=True, client_count=1):
             transforms.ToTensor(),
             transforms.Normalize(mnist_mean, mnist_std)
         ])
-        dataset = datasets.MNIST(root='federated_learning/client/data', train=train, download=True, transform=transform)
+        dataset = torch_datasets.MNIST(root='federated_learning/client/data', train=train, download=True, transform=transform)
     elif training_config.get("dataset") == "CIFAR10":
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(cifar10_means, cifar10_stds)
         ])
-        dataset = datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
+        dataset = torch_datasets.CIFAR10(root='federated_learning/client/data', train=train, download=True, transform=transform)
     elif training_config.get("dataset") == "Iris":
         # 加载鸢尾花数据集
-        iris = skdatasets.load_iris()
+        iris = sk_datasets.load_iris()
         # 数据和标签转换为Tensor
         data_tensor = torch.tensor(iris.data, dtype=torch.float32)
         target_tensor = torch.tensor(iris.target, dtype=torch.long)
         # 创建TensorDataset
         dataset = TensorDataset(data_tensor, target_tensor)
     elif training_config.get("dataset") == "Wine":
-        wine_dataset = skdatasets.load_wine()
+        wine_dataset = sk_datasets.load_wine()
         data_tensor = torch.tensor(wine_dataset.data, dtype=torch.float32)
         target_tensor = torch.tensor(wine_dataset.target, dtype=torch.long)
         dataset = TensorDataset(data_tensor, target_tensor)
     elif training_config.get("dataset") == "Breast_cancer":
-        breast_cancer_dataset = skdatasets.load_breast_cancer()
+        breast_cancer_dataset = sk_datasets.load_breast_cancer()
         data_tensor = torch.tensor(breast_cancer_dataset.data, dtype=torch.float32)
         target_tensor = torch.tensor(breast_cancer_dataset.target, dtype=torch.long)
         dataset = TensorDataset(data_tensor, target_tensor)
     else:
         raise ValueError("Unsupported dataset. Please choose either 'MNIST' or 'CIFAR10'.")
 
-    loader = DataLoader(dataset, batch_size=training_config.get("batch_size", 64), shuffle=train)
+    # 计算每个客户端的数据量
+    data_per_client = len(dataset) // client_count
+    lengths = [data_per_client] * client_count
+    # 如果数据不能被client_count整除，将剩余的数据分配给最后一个客户端
+    lengths[-1] += len(dataset) % client_count
+    # 使用random_split进行数据划分
+    datasets = torch.utils.data.random_split(dataset, lengths)
+    # print(f"Client {client_index} has {len(datasets)} samples.")
+    loader = DataLoader(datasets[client_index-1], batch_size=training_config.get("batch_size", 64), shuffle=train)
     return loader
 
 

@@ -50,6 +50,7 @@ server_url = args.server
 client_IP = get_local_ip()
 client_port = args.port  # 从命令行参数获取或使用默认值
 client_id = None
+client_index = None
 # 根据时间戳创建保存目录
 save_dir = f'federated_learning/client/save/{time.strftime("%Y%m%d-%H%M%S")}'
 training_config = {}
@@ -112,9 +113,10 @@ def register_client():
     """
     response = requests.post(f"{server_url}/api/register_client", json={"client_url": f"http://{client_IP}:{client_port}"})
     if response.status_code == 200:
-        global client_id, training_config
+        global client_id, training_config, client_index
         client_id = response.json()['client_id']
         training_config = response.json()['training_config']
+        client_index = response.json()['client_index']
         save_training_config()
         print(f"注册成功，ID: {client_id}, 训练配置: {training_config}")
 
@@ -185,6 +187,7 @@ def train_model_one_round(global_model_info):
     """
     global_model_state_dict = global_model_info['global_model']
     current_round = global_model_info["current_round"]
+    current_client_num = requests.get(f"{server_url}/api/get_client_count").json()["client_count"]
     device = model_processing.get_device()
     print("开始训练，全局轮数:", current_round)
     model = model_processing.get_model(training_config)  # 此处应根据training_config['model']选择不同的模型
@@ -201,7 +204,7 @@ def train_model_one_round(global_model_info):
     # 输出线性层是否会计算梯度
     # print("before training,linear:", model.linear.fc.weight.requires_grad)
 
-    data_loader = model_processing.load_data(training_config, train=True)
+    data_loader = model_processing.load_data(training_config, train=True, client_count=current_client_num,client_index=client_index)
     optimizer = model_processing.get_optimizer(model,training_config)
     loss_function = model_processing.get_loss_function(training_config)
     model.train()
