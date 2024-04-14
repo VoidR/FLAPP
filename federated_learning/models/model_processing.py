@@ -21,6 +21,7 @@ from federated_learning.models.MLP import MLP
 from federated_learning.models.LogisticRegression import LogisticRegressionModel
 from federated_learning.models.LeNet import LeNet
 from federated_learning.models.AlexNet import AlexNet
+from federated_learning.models.SimpleCNN import SimpleCNN
 
 def get_device():
     """
@@ -71,11 +72,12 @@ def get_model(training_config):
         model = LeNet(dim_in=num_channels,num_classes=num_classes,img_size=img_size)
     elif training_config.get("model") == "AlexNet":
         model = AlexNet(dim_in=num_channels,num_classes=num_classes,img_size=img_size)
-
+    elif training_config.get("model") == "CNN":
+        model = SimpleCNN(dim_in=num_channels,num_classes=num_classes,img_size=img_size)
     return model
 
 
-def load_data(training_config, train=True):
+def load_data(training_config, train=True, client_count=1):
     """
     加载数据集进行训练或测试。
     input: train (bool): 如果为True，则加载训练集，否则加载测试集。
