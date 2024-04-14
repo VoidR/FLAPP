@@ -174,6 +174,9 @@ class Linear(nn.Module):
     def correction(self, gamma, v, post_data, grad, r):
         sigma_conv_a, sigma_conv_b, beta = post_data
 
+        sigma_conv_a =torch.tensor(sigma_conv_a)
+        sigma_conv_b =torch.tensor(sigma_conv_b)
+        beta =torch.tensor(beta)
         return (grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r
 
     def get_grad(self):
@@ -266,6 +269,9 @@ class Conv2d(nn.Module):
 
     def correction(self, gamma, v, post_data, grad, r):
         sigma_conv_a, sigma_conv_b, beta = post_data
+        sigma_conv_a =torch.tensor(sigma_conv_a)
+        sigma_conv_b =torch.tensor(sigma_conv_b)
+        beta =torch.tensor(beta)
 
         # print (((grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r.unsqueeze(-1).unsqueeze(-1)).norm())
         # print ('What is the grad : ',  grad.norm(), sigma_conv_a.norm(), sigma_conv_b.norm(), beta.norm(), ((grad - gamma[0] * sigma_conv_a - gamma[1] * beta + gamma[0] * gamma[1] * sigma_conv_b) * r.unsqueeze(-1).unsqueeze(-1)).norm())

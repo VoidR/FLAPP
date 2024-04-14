@@ -114,9 +114,9 @@ def aggregate_model_updates(model_updates, round_number):
         current_modules = global_model.fl_modules()
         counter = 1 
         for client_model in model_updates:
-            for m_n, m in current_modules.fl_modules().items():
+            for m_n, m in current_modules.items():
                 current_layer = current_modules[m_n]
-                current_layer.aggregate_grad(current_layer.correction(client_model["gamma"], client_model["v"], client_model[m_n]["post_data"], client_model[m_n]["grad"], client_model[m_n]["r"]), counter)
+                current_layer.aggregate_grad(current_layer.correction(client_model["gamma"], client_model["v"], client_model[m_n]["post_data"], torch.tensor(client_model[m_n]["grad"]), torch.tensor(client_model[m_n]["r"])), counter)
             counter += 1
         # for m in global_model.fl_modules().items():
         #     m[1].update(float(training_config.get("learning_rate",0.001)) / counter)

@@ -44,12 +44,12 @@ def get_local_ip():
         s.close()
     return IP
 
-def print_types(obj, prefix=""):
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            print_types(v, prefix=f"{prefix}.{k}")
-    else:
-        print(f"{prefix}: {type(obj)}")
+# def print_types(obj, prefix=""):
+#     if isinstance(obj, dict):
+#         for k, v in obj.items():
+#             print_types(v, prefix=f"{prefix}.{k}")
+#     else:
+#         print(f"{prefix}: {type(obj)}")
 # 配置变量
 server_url = args.server
 # server_url = "http://192.168.1.115:5000"
@@ -182,6 +182,8 @@ def train_model():
 
     # communication_stats["data_sent"].append(len(json.dumps(local_model_update).encode('utf-8')))
     # print(local_model_update)
+    # save_results["data_sent"] = len(json.dumps(model_processing.tensors_to_lists(local_model_update)).encode('utf-8'))
+    # print_types(local_model_update,"local_model_update")
     save_results["data_sent"] = len(json.dumps(local_model_update).encode('utf-8'))
     save_stats(save_results)
     return jsonify({"model_update": local_model_update})
@@ -266,10 +268,10 @@ def apply_security_measures(local_updated_model):
     """
     model_update = {}
     if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:
+        model_update["gamma"] = local_updated_model.gamma
+        model_update["v"] = local_updated_model.v
         for m_n, m in local_updated_model.fl_modules().items():
             model_update[m_n] = {}
-            model_update["gamma"] = local_updated_model.gamma
-            model_update["v"] = local_updated_model.v
             model_update[m_n]["post_data"] = m.post_data
             model_update[m_n]["grad"] = m.get_grad()
             model_update[m_n]["r"] = m.get_r()
@@ -283,6 +285,7 @@ def apply_security_measures(local_updated_model):
             model_update = model_processing.tensor_to_list(model_update.state_dict())
     else:
         model_update = model_processing.tensor_to_list(local_updated_model.state_dict())
+    # print_types(model_update,"model_update")
     # 将来可能添加其他安全措施
     return model_update
 
