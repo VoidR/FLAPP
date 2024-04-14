@@ -196,9 +196,9 @@ class Linear(nn.Module):
 
     def aggregate_grad(self, grad, counter):
         try:
-            self.fc.weight.grad = (self.fc.weight.grad * (counter - 1) + grad) / counter
+            self.fc.weight.grad = (self.fc.weight.grad * (counter - 1) + grad.to(get_device())) / counter
         except Exception as e:
-            self.fc.weight.grad = grad
+            self.fc.weight.grad = grad.to(get_device())
 
     def update(self, lr):
         self.fc.weight = nn.Parameter(self.fc.weight - self.fc.weight.grad * lr)
@@ -292,9 +292,9 @@ class Conv2d(nn.Module):
 
     def aggregate_grad(self, grad, counter):
         try:
-            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
+            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad.to(get_device())) / counter
         except Exception as e:
-            self.conv.weight.grad = grad
+            self.conv.weight.grad = grad.to(get_device())
 
     def update(self, lr):
         self.conv.weight = nn.Parameter(self.conv.weight - self.conv.weight.grad * lr)
