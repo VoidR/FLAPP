@@ -195,10 +195,16 @@ class Linear(nn.Module):
     #     return self.rectify_grad.abs().max() + self.sigma_conv_a.abs().max() + self.sigma_conv_b.abs().max() + self.beta().abs().max()
 
     def aggregate_grad(self, grad, counter):
+        grad = grad.to(get_device())
+        if self.conv.weight.grad is None:
+            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device())
         try:
-            self.fc.weight.grad = (self.fc.weight.grad * (counter - 1) + grad.to(get_device())) / counter
-        except Exception as e:
-            self.fc.weight.grad = grad.to(get_device())
+            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
+        except TypeError as e:
+            print(f"Exception: {e}")
+        except RuntimeError as e:
+            print(f"Exception: {e}")
+            self.conv.weight.grad = grad.to(self.conv.weight.grad.dtype)
 
     def update(self, lr):
         self.fc.weight = nn.Parameter(self.fc.weight - self.fc.weight.grad * lr)
@@ -291,10 +297,16 @@ class Conv2d(nn.Module):
         return self.r
 
     def aggregate_grad(self, grad, counter):
+        grad = grad.to(get_device())
+        if self.conv.weight.grad is None:
+            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=get_device())
         try:
-            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad.to(get_device())) / counter
-        except Exception as e:
-            self.conv.weight.grad = grad.to(get_device())
+            self.conv.weight.grad = (self.conv.weight.grad * (counter - 1) + grad) / counter
+        except TypeError as e:
+            print(f"Exception: {e}")
+        except RuntimeError as e:
+            print(f"Exception: {e}")
+            self.conv.weight.grad = grad.to(self.conv.weight.grad.dtype)
 
     def update(self, lr):
         self.conv.weight = nn.Parameter(self.conv.weight - self.conv.weight.grad * lr)
