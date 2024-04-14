@@ -44,7 +44,12 @@ def get_local_ip():
         s.close()
     return IP
 
-
+def print_types(obj, prefix=""):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            print_types(v, prefix=f"{prefix}.{k}")
+    else:
+        print(f"{prefix}: {type(obj)}")
 # 配置变量
 server_url = args.server
 # server_url = "http://192.168.1.115:5000"
@@ -176,6 +181,7 @@ def train_model():
     local_model_update = apply_security_measures(local_updated_model)
 
     # communication_stats["data_sent"].append(len(json.dumps(local_model_update).encode('utf-8')))
+    # print(local_model_update)
     save_results["data_sent"] = len(json.dumps(local_model_update).encode('utf-8'))
     save_stats(save_results)
     return jsonify({"model_update": local_model_update})
@@ -267,11 +273,12 @@ def apply_security_measures(local_updated_model):
             model_update[m_n]["post_data"] = m.post_data
             model_update[m_n]["grad"] = m.get_grad()
             model_update[m_n]["r"] = m.get_r()
+        
+            
         model_update = model_processing.tensors_to_lists(model_update)
     elif training_config.get("protect_client_model") == True:
         if training_config['client_use_differential_privacy']:
             dp_params = training_config['differential_privacy']
-            # 应用差分隐私机制，比如添加高斯噪声
             model_update = dp_protection(local_updated_model, dp_params)
             model_update = model_processing.tensor_to_list(model_update.state_dict())
     else:
