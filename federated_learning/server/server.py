@@ -40,7 +40,7 @@ optimizer_config = ['SGD','Adam']
 training_config = {
     "model":"ResNet20",
     "dataset":"CIFAR10",
-    "optimizer":"SGD",
+    "optimizer":"Adam",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
     "global_epochs":200,
