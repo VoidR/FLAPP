@@ -303,8 +303,8 @@ class Conv2d(nn.Module):
         grad = grad.to(device=self.conv.weight.device, dtype=self.conv.weight.dtype)
         
         # 如果当前没有梯度，则初始化一个全零梯度
-        if self.conv.weight.grad is None:
-            self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=self.conv.weight.device, dtype=self.conv.weight.dtype)
+        # if self.conv.weight.grad is None:
+        #     self.conv.weight.grad = torch.zeros_like(self.conv.weight, device=self.conv.weight.device, dtype=self.conv.weight.dtype)
 
         # 尝试更新梯度
         try:
@@ -312,9 +312,10 @@ class Conv2d(nn.Module):
         except Exception as e:
             # 如果发生任何异常，输出异常信息
             print(f"发生异常: {e}")
-
+            self.conv.weight.grad = grad
+        
         # 输出当前梯度的设备和数据类型，用于调试
-        print(f"梯度设备: {self.conv.weight.grad.device}, 梯度数据类型: {self.conv.weight.grad.dtype}")
+        # print(f"梯度设备: {self.conv.weight.grad.device}, 梯度数据类型: {self.conv.weight.grad.dtype}")
 
 
 
