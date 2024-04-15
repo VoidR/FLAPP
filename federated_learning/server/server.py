@@ -111,12 +111,21 @@ def aggregate_model_updates(model_updates, round_number):
     aggregated_update = {}
     if training_config.get("model") == "ResNet20" and training_config.get("protect_global_model") == True:  
         # 初始模型
-        current_modules = global_model.fl_modules()
+        # current_modules = global_model.fl_modules()
+        # counter = 1 
+        # for client_model in model_updates:
+        #     for m_n, m in current_modules.items():
+        #         current_layer = current_modules[m_n]
+        #         current_layer.aggregate_grad(current_layer.correction(client_model["gamma"], client_model["v"], client_model[m_n]["post_data"], torch.tensor(client_model[m_n]["grad"]), torch.tensor(client_model[m_n]["r"])), counter)
+        #         current_layer.update(float(training_config.get("learning_rate",0.001)) / counter)
+        #     counter += 1        
+        # current_modules = global_model.fl_modules()
         counter = 1 
         for client_model in model_updates:
-            for m_n, m in current_modules.items():
-                current_layer = current_modules[m_n]
+            for m_n, m in global_model.fl_modules().items():
+                current_layer = global_model.fl_modules()[m_n]
                 current_layer.aggregate_grad(current_layer.correction(client_model["gamma"], client_model["v"], client_model[m_n]["post_data"], torch.tensor(client_model[m_n]["grad"]), torch.tensor(client_model[m_n]["r"])), counter)
+                current_layer.update(float(training_config.get("learning_rate",0.001)) / counter)
             counter += 1
         # for m in global_model.fl_modules().items():
         #     m[1].update(float(training_config.get("learning_rate",0.001)) / counter)
