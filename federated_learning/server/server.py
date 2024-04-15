@@ -35,10 +35,11 @@ save_dir = f'federated_learning/server/save/{time.strftime("%Y%m%d-%H%M%S")}'
 model_config = ["NN", "ResNet20", "MLP","LR", "LeNet","AlexNet","CNN"]
 dataset_config = ["MNIST", "CIFAR10","Iris","Wine","Breast_cancer"]
 metrics_config = ["Accuracy", "Loss", "Precision", "Recall", "F1"]
+optimizer_config = ['SGD','Adam']
 
 training_config = {
-    "model":"LR",
-    "dataset":"Breast_cancer",
+    "model":"ResNet20",
+    "dataset":"CIFAR10",
     "optimizer":"SGD",
     "loss":"CrossEntropy",
     "metrics":["Accuracy","Loss"],
@@ -52,7 +53,7 @@ training_config = {
         "delta": 1e-5,  
         "sensitivity": 1.0 
     },
-    "protect_global_model": False,
+    "protect_global_model": True,
     "protect_client_models": False
 }
 
